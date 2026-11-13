@@ -154,32 +154,32 @@ class MyAccessibilityService : AccessibilityService() {
 
         // --- РЯД 1: Свайпы и Зум ---
         val row1 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        row1.addView(createWorkingButton("⬅️", Color.argb(255, 60, 60, 60)) { performSwipe(-400, 0) }, 1f)
-        row1.addView(createWorkingButton("➡️", Color.argb(255, 60, 60, 60)) { performSwipe(400, 0) }, 1f)
-        row1.addView(createWorkingButton("➖", Color.argb(255, 60, 60, 60)) { performPinch(false) }, 1f)
-        row1.addView(createWorkingButton("➕", Color.argb(255, 60, 60, 60)) { performPinch(true) }, 1f)
+        row1.addView(createWorkingButton("⬅️", Color.argb(255, 60, 60, 60)) { performSwipe(-400, 0) }, createWeightedParams())
+        row1.addView(createWorkingButton("➡️", Color.argb(255, 60, 60, 60)) { performSwipe(400, 0) }, createWeightedParams())
+        row1.addView(createWorkingButton("➖", Color.argb(255, 60, 60, 60)) { performPinch(false) }, createWeightedParams())
+        row1.addView(createWorkingButton("➕", Color.argb(255, 60, 60, 60)) { performPinch(true) }, createWeightedParams())
         controlPanel?.addView(row1)
 
         // --- РЯД 2: Скролл и Главная кнопка ---
         val row2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        row2.addView(createWorkingButton("⬆️", Color.argb(255, 60, 60, 60)) { performSwipe(0, -500) }, 1f)
-        row2.addView(createWorkingButton("⬇️", Color.argb(255, 60, 60, 60)) { performSwipe(0, 500) }, 1f)
+        row2.addView(createWorkingButton("⬆️", Color.argb(255, 60, 60, 60)) { performSwipe(0, -500) }, createWeightedParams())
+        row2.addView(createWorkingButton("⬇️", Color.argb(255, 60, 60, 60)) { performSwipe(0, 500) }, createWeightedParams())
         
         val mainBtn = createWorkingButton("👆 Тап/Меню", Color.argb(255, 0, 100, 200)) {
             performTap(cursorX + 40f, cursorY + 40f)
         }
-        // Добавляем долгое нажатие для меню
         mainBtn.setOnLongClickListener {
             performLongPress(cursorX + 40f, cursorY + 40f)
             true
         }
-        row2.addView(mainBtn, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 2f).apply {
+        val mainParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 2f).apply {
             setMargins(10, 0, 0, 0)
-        })
+        }
+        row2.addView(mainBtn, mainParams)
         controlPanel?.addView(row2)
 
         // --- КНОПКА СВЕРНУТЬ ---
-        controlPanel?.addView(createWorkingButton("❌ Свернуть", Color.argb(255, 150, 50, 50)) { togglePanel(false) }, 1f)
+        controlPanel?.addView(createWorkingButton("❌ Свернуть", Color.argb(255, 150, 50, 50)) { togglePanel(false) }, createWeightedParams())
 
         windowManager?.addView(controlPanel, panelParams)
 
@@ -209,7 +209,14 @@ class MyAccessibilityService : AccessibilityService() {
         Toast.makeText(this, "✅ Все кнопки активны!", Toast.LENGTH_SHORT).show()
     }
 
-    // === НОВАЯ ФУНКЦИЯ: Создаёт кнопку, которая ТОЧНО работает ===
+    // === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===
+
+    private fun createWeightedParams(): LinearLayout.LayoutParams {
+        return LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+            setMargins(5, 0, 5, 10)
+        }
+    }
+
     private fun createWorkingButton(text: String, bgColor: Int, onClick: () -> Unit): TextView {
         return TextView(this).apply {
             this.text = text
@@ -219,26 +226,19 @@ class MyAccessibilityService : AccessibilityService() {
             setTextColor(Color.WHITE)
             setPadding(15, 20, 15, 20)
             
-            // ВАЖНО: явно делаем кликабельной
             isClickable = true
             isFocusable = true
             isFocusableInTouchMode = true
             
-            // Обработчик касаний - ГАРАНТИРУЕТ получение события
             setOnTouchListener { v, event ->
                 when (event.action) {
                     MotionEvent.ACTION_DOWN -> {
-                        // Визуальная обратная связь: меняем цвет
                         v.setBackgroundColor(Color.argb(255, 150, 150, 150))
-                        // Возвращаем true, чтобы гарантировать получение ACTION_UP
                         true
                     }
                     MotionEvent.ACTION_UP -> {
-                        // Возвращаем цвет
                         v.setBackgroundColor(bgColor)
-                        // Вызываем действие
                         onClick()
-                        // Возвращаем false, чтобы сработал onClickListener (если есть)
                         false
                     }
                     MotionEvent.ACTION_CANCEL -> {
@@ -249,7 +249,6 @@ class MyAccessibilityService : AccessibilityService() {
                 false
             }
             
-            // Дублируем через onClickListener для надёжности
             setOnClickListener { onClick() }
         }
     }
