@@ -1,0 +1,6 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Наша кастомная тема-заглушка -->
+    <style name="Theme.MyJoystick" parent="android:Theme.Material.Light.DarkActionBar">
+        <!-- В будущем здесь мы пропишем свои цвета, шрифты и стили кнопок -->
+    </style>
+</resources>
