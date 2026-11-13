@@ -2,20 +2,19 @@ package com.example.myjoystick
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
-import android.content.Intent
 import android.graphics.PixelFormat
-import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
-import android.widget.Button
+import android.widget.TextView
 import android.widget.Toast
 
 class MyAccessibilityService : AccessibilityService() {
 
-    private var floatingButton: Button? = null
+    private var floatingButton: View? = null
     private var windowManager: WindowManager? = null
 
     override fun onServiceConnected() {
@@ -33,7 +32,6 @@ class MyAccessibilityService : AccessibilityService() {
         // 2. ПРОВЕРКА: Есть ли права на оверлей?
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (!Settings.canDrawOverlays(this)) {
-                // Если прав нет, мы НЕ рисуем кнопку, чтобы приложение не упало
                 return 
             }
         }
@@ -54,11 +52,13 @@ class MyAccessibilityService : AccessibilityService() {
             y = 200
         }
 
-        // 4. Рисуем кнопку
-        floatingButton = Button(this).apply {
+        // 4. Рисуем безопасный элемент (TextView вместо Button, чтобы избежать крашей в сервисе)
+        floatingButton = TextView(this).apply {
             text = "🕹️"
-            textSize = 24f
-            setBackgroundColor(0x80000000.toInt())
+            textSize = 32f
+            gravity = Gravity.CENTER
+            setBackgroundColor(0x80000000.toInt()) // Полупрозрачный чёрный
+            setPadding(20, 20, 20, 20)
             setOnClickListener {
                 Toast.makeText(this@MyAccessibilityService, "Джойстик работает!", Toast.LENGTH_SHORT).show()
             }
@@ -68,7 +68,6 @@ class MyAccessibilityService : AccessibilityService() {
         try {
             windowManager?.addView(floatingButton, params)
         } catch (e: Exception) {
-            // Если вдруг всё равно упадёт, мы это перехватим
             e.printStackTrace()
         }
     }
@@ -83,7 +82,5 @@ class MyAccessibilityService : AccessibilityService() {
         }
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // Пока пусто
-    }
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
 }
