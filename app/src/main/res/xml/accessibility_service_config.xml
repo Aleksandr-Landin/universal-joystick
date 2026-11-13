@@ -5,4 +5,5 @@
     android:accessibilityFlags="flagDefault"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:canRetrieveWindowContent="true"
+    android:canPerformGestures="true"
     android:settingsActivity="com.example.myjoystick.MainActivity" />
