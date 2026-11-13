@@ -4,10 +4,14 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Intent
 import android.graphics.PixelFormat
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import android.view.Gravity
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.widget.Button
+import android.widget.Toast
 
 class MyAccessibilityService : AccessibilityService() {
 
@@ -17,7 +21,7 @@ class MyAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         
-        // Настраиваем параметры сервиса
+        // 1. Настраиваем параметры сервиса
         val info = AccessibilityServiceInfo().apply {
             eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
@@ -26,7 +30,15 @@ class MyAccessibilityService : AccessibilityService() {
         }
         serviceInfo = info
 
-        // Создаём плавающее окно ("Маячок")
+        // 2. ПРОВЕРКА: Есть ли права на оверлей?
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (!Settings.canDrawOverlays(this)) {
+                // Если прав нет, мы НЕ рисуем кнопку, чтобы приложение не упало
+                return 
+            }
+        }
+
+        // 3. Создаём плавающее окно ("Маячок")
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -42,30 +54,29 @@ class MyAccessibilityService : AccessibilityService() {
             y = 200
         }
 
-        // Рисуем простую кнопку
+        // 4. Рисуем кнопку
         floatingButton = Button(this).apply {
             text = "🕹️"
             textSize = 24f
             setBackgroundColor(0x80000000.toInt())
             setOnClickListener {
-                removeFloatingButton()
+                Toast.makeText(this@MyAccessibilityService, "Джойстик работает!", Toast.LENGTH_SHORT).show()
             }
         }
 
-        // Добавляем кнопку на экран
-        windowManager?.addView(floatingButton, params)
+        // 5. Добавляем кнопку на экран
+        try {
+            windowManager?.addView(floatingButton, params)
+        } catch (e: Exception) {
+            // Если вдруг всё равно упадёт, мы это перехватим
+            e.printStackTrace()
+        }
     }
 
-    override fun onInterrupt() {
-        // Требуется по интерфейсу
-    }
+    override fun onInterrupt() {}
 
     override fun onDestroy() {
         super.onDestroy()
-        removeFloatingButton()
-    }
-
-    private fun removeFloatingButton() {
         if (floatingButton != null) {
             windowManager?.removeView(floatingButton)
             floatingButton = null
@@ -73,6 +84,6 @@ class MyAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // Пока не обрабатываем события
+        // Пока пусто
     }
 }
