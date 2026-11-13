@@ -15,6 +15,7 @@ import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.widget.Button
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -31,7 +32,6 @@ class MyAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        Toast.makeText(this, "🕹️ Сервис запущен!", Toast.LENGTH_LONG).show()
 
         val info = AccessibilityServiceInfo().apply {
             eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
@@ -90,8 +90,8 @@ class MyAccessibilityService : AccessibilityService() {
             y = 200
         }
 
-        // --- ТАЧПАД ---
-        val trackpad = View(this).apply {
+        // --- ТАЧПАД (ИСПРАВЛЕНО: используем FrameLayout вместо View) ---
+        val trackpad = FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(250, 250).apply { 
                 bottomMargin = 20 
             }
@@ -105,11 +105,12 @@ class MyAccessibilityService : AccessibilityService() {
                 gravity = Gravity.CENTER
                 setTextColor(Color.argb(150, 255, 255, 255))
                 textSize = 14f
+                layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
             }
-            (this as LinearLayout).addView(hint, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 
-                LinearLayout.LayoutParams.MATCH_PARENT
-            ))
+            addView(hint)  // ← Теперь это работает, потому что FrameLayout умеет содержать детей
         }
 
         var lastTouchX = 0f
@@ -220,7 +221,6 @@ class MyAccessibilityService : AccessibilityService() {
         }
     }
 
-    // Переименована, чтобы не конфликтовать с LinearLayout.addView
     private fun LinearLayout.addWeightedBtn(text: String, onClick: () -> Unit) {
         val btn = makeBtn(text, onClick)
         addView(btn, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
