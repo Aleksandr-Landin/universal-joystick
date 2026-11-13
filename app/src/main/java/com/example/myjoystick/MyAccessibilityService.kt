@@ -26,8 +26,8 @@ class MyAccessibilityService : AccessibilityService() {
     private var controlPanel: LinearLayout? = null
     private var cursorView: View? = null
 
-    private var cursorX = 500f
-    private var cursorY = 800f
+    private var cursorX = 540f
+    private var cursorY = 1200f
     private lateinit var cursorParams: WindowManager.LayoutParams
 
     override fun onServiceConnected() {
@@ -134,8 +134,9 @@ class MyAccessibilityService : AccessibilityService() {
                     val dy = event.y - lastTouchY
                     cursorX += dx * sensitivity
                     cursorY += dy * sensitivity
+                    // Увеличили диапазон: теперь курсор достаёт до статус-бара
                     cursorX = cursorX.coerceIn(0f, 1080f)
-                    cursorY = cursorY.coerceIn(0f, 2400f)
+                    cursorY = cursorY.coerceIn(0f, 3000f)
                     cursorParams.x = cursorX.toInt()
                     cursorParams.y = cursorY.toInt()
                     windowManager?.updateViewLayout(cursorView, cursorParams)
@@ -152,19 +153,30 @@ class MyAccessibilityService : AccessibilityService() {
         }
         controlPanel?.addView(trackpad)
 
-        // --- РЯД 1 ---
+        // --- РЯД 1: Свайпы (НАПРАВЛЕНИЯ ИСПРАВЛЕНЫ) ---
         val row1 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        row1.addView(createBtn("⬅️", Color.argb(255, 60, 60, 60)) { performSwipe(-400, 0) }, createWeightedParams())
-        row1.addView(createBtn("➡️", Color.argb(255, 60, 60, 60)) { performSwipe(400, 0) }, createWeightedParams())
+        // ⬅️ = свайп вправо (контент едет влево)
+        row1.addView(createBtn("⬅️", Color.argb(255, 60, 60, 60)) { performSwipe(400, 0) }, createWeightedParams())
+        // ➡️ = свайп влево (контент едет вправо)
+        row1.addView(createBtn("➡️", Color.argb(255, 60, 60, 60)) { performSwipe(-400, 0) }, createWeightedParams())
+        // ➖ Уменьшить
         row1.addView(createBtn("➖", Color.argb(255, 60, 60, 60)) { performPinch(false) }, createWeightedParams())
+        // ➕ Увеличить
         row1.addView(createBtn("➕", Color.argb(255, 60, 60, 60)) { performPinch(true) }, createWeightedParams())
         controlPanel?.addView(row1)
 
-        // --- РЯД 2 ---
+        // --- РЯД 2: Скролл + Телепорт + Главная кнопка ---
         val row2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        row2.addView(createBtn("⬆️", Color.argb(255, 60, 60, 60)) { performSwipe(0, -500) }, createWeightedParams())
-        row2.addView(createBtn("⬇️", Color.argb(255, 60, 60, 60)) { performSwipe(0, 500) }, createWeightedParams())
+        // ⬆️ = свайп вниз (контент едет вверх — к началу страницы)
+        row2.addView(createBtn("⬆️", Color.argb(255, 60, 60, 60)) { performSwipe(0, 500) }, createWeightedParams())
+        // ⬇️ = свайп вверх (контент едет вниз — к концу страницы)
+        row2.addView(createBtn("⬇️", Color.argb(255, 60, 60, 60)) { performSwipe(0, -500) }, createWeightedParams())
+        // 🏠 Домой — вернуть курсор в центр
+        row2.addView(createBtn("🏠", Color.argb(255, 100, 100, 0)) { teleportCursor(540f, 1200f) }, createWeightedParams())
+        // ⬆⬆ К статус-бару — телепорт курсора наверх
+        row2.addView(createBtn("⬆⬆", Color.argb(255, 100, 0, 100)) { teleportCursor(540f, 80f) }, createWeightedParams())
         
+        // Главная кнопка (Тап / Меню)
         val mainBtn = createBtn("👆 Тап", Color.argb(255, 0, 100, 200)) {
             performTap(cursorX + 40f, cursorY + 40f)
         }
@@ -204,7 +216,11 @@ class MyAccessibilityService : AccessibilityService() {
             y = 20
         }
         windowManager?.addView(triggerButton, triggerParams)
+
+        Toast.makeText(this, "✅ Пульт обновлён!", Toast.LENGTH_SHORT).show()
     }
+
+    // === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===
 
     private fun createWeightedParams(): LinearLayout.LayoutParams {
         return LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
@@ -245,21 +261,30 @@ class MyAccessibilityService : AccessibilityService() {
         }
     }
 
+    // Телепорт курсора в нужную точку
+    private fun teleportCursor(x: Float, y: Float) {
+        cursorX = x
+        cursorY = y
+        cursorParams.x = x.toInt()
+        cursorParams.y = y.toInt()
+        windowManager?.updateViewLayout(cursorView, cursorParams)
+        Toast.makeText(this, "📍 Курсор перемещён!", Toast.LENGTH_SHORT).show()
+    }
+
     private fun togglePanel(show: Boolean) {
         controlPanel?.visibility = if (show) View.VISIBLE else View.GONE
         triggerButton?.visibility = if (show) View.GONE else View.VISIBLE
     }
 
-    // === ЖЕСТЫ (только результат) ===
+    // === ЖЕСТЫ ===
     private fun performTap(x: Float, y: Float) {
         val path = Path().apply { moveTo(x, y) }
         val gesture = GestureDescription.Builder()
             .addStroke(GestureDescription.StrokeDescription(path, 0, 100))
             .build()
-        
         dispatchGesture(gesture, object : GestureResultCallback() {
             override fun onCompleted(gesture: GestureDescription?) {
-                Toast.makeText(this@MyAccessibilityService, "✅ Тап сработал!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MyAccessibilityService, "✅ Тап!", Toast.LENGTH_SHORT).show()
             }
             override fun onCancelled(gesture: GestureDescription?) {
                 Toast.makeText(this@MyAccessibilityService, "❌ Тап не сработал", Toast.LENGTH_SHORT).show()
@@ -274,10 +299,10 @@ class MyAccessibilityService : AccessibilityService() {
             .build()
         dispatchGesture(gesture, object : GestureResultCallback() {
             override fun onCompleted(gesture: GestureDescription?) {
-                Toast.makeText(this@MyAccessibilityService, "✅ Меню вызвано!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MyAccessibilityService, "✅ Меню!", Toast.LENGTH_SHORT).show()
             }
             override fun onCancelled(gesture: GestureDescription?) {
-                Toast.makeText(this@MyAccessibilityService, "❌ Меню не вызвано", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MyAccessibilityService, "❌ Меню не сработало", Toast.LENGTH_SHORT).show()
             }
         }, null)
     }
@@ -290,7 +315,7 @@ class MyAccessibilityService : AccessibilityService() {
             .build()
         dispatchGesture(gesture, object : GestureResultCallback() {
             override fun onCompleted(gesture: GestureDescription?) {
-                Toast.makeText(this@MyAccessibilityService, "✅ Скролл сработал!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MyAccessibilityService, "✅ Скролл!", Toast.LENGTH_SHORT).show()
             }
             override fun onCancelled(gesture: GestureDescription?) {
                 Toast.makeText(this@MyAccessibilityService, "❌ Скролл не сработал", Toast.LENGTH_SHORT).show()
@@ -298,23 +323,32 @@ class MyAccessibilityService : AccessibilityService() {
         }, null)
     }
 
+    // ЗУМ с увеличенным размахом (400px вместо 120px)
     private fun performPinch(zoomIn: Boolean) {
-        val cx = cursorX + 40f; val cy = cursorY + 40f
-        val path1 = Path(); val path2 = Path()
+        val cx = cursorX + 40f
+        val cy = cursorY + 40f
+        val path1 = Path()
+        val path2 = Path()
+        
         if (zoomIn) {
-            path1.moveTo(cx - 30, cy); path1.lineTo(cx - 150, cy)
-            path2.moveTo(cx + 30, cy); path2.lineTo(cx + 150, cy)
+            // Увеличение: пальцы расходятся от центра
+            path1.moveTo(cx - 50, cy); path1.lineTo(cx - 250, cy)
+            path2.moveTo(cx + 50, cy); path2.lineTo(cx + 250, cy)
         } else {
-            path1.moveTo(cx - 150, cy); path1.lineTo(cx - 30, cy)
-            path2.moveTo(cx + 150, cy); path2.lineTo(cx + 30, cy)
+            // Уменьшение: пальцы сходятся к центру
+            path1.moveTo(cx - 250, cy); path1.lineTo(cx - 50, cy)
+            path2.moveTo(cx + 250, cy); path2.lineTo(cx + 50, cy)
         }
+        
         val gesture = GestureDescription.Builder()
             .addStroke(GestureDescription.StrokeDescription(path1, 0, 300))
             .addStroke(GestureDescription.StrokeDescription(path2, 0, 300))
             .build()
         dispatchGesture(gesture, object : GestureResultCallback() {
             override fun onCompleted(gesture: GestureDescription?) {
-                Toast.makeText(this@MyAccessibilityService, "✅ Зум сработал!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MyAccessibilityService, 
+                    if (zoomIn) "🔍 Увеличено!" else "🔎 Уменьшено!", 
+                    Toast.LENGTH_SHORT).show()
             }
             override fun onCancelled(gesture: GestureDescription?) {
                 Toast.makeText(this@MyAccessibilityService, "❌ Зум не сработал", Toast.LENGTH_SHORT).show()
