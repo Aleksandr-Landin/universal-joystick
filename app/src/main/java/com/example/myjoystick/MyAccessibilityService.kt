@@ -3,7 +3,10 @@ package com.example.myjoystick
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.accessibilityservice.GestureDescription
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Color
 import android.graphics.Path
 import android.graphics.PixelFormat
@@ -30,6 +33,19 @@ class MyAccessibilityService : AccessibilityService() {
     private var cursorY = 1200f
     private lateinit var cursorParams: WindowManager.LayoutParams
 
+    // Параметры панели выносим в поле, чтобы перестраивать её на лету
+    private lateinit var panelParams: WindowManager.LayoutParams
+    private var overlayType = 0
+
+    // === ПРИЁМНИК СИГНАЛА ОТ НАСТРОЕК ===
+    private val rebuildReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == SettingsManager.ACTION_REBUILD) {
+                rebuildPanel()
+            }
+        }
+    }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
 
@@ -41,19 +57,12 @@ class MyAccessibilityService : AccessibilityService() {
         serviceInfo = info
 
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        val overlayType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        overlayType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
         } else {
             @Suppress("DEPRECATION")
             WindowManager.LayoutParams.TYPE_PHONE
         }
-
-        // === ЧИТАЕМ НАСТРОЙКИ ИЗ ПАМЯТИ ===
-        val panelWidthPx = SettingsManager.getWidthPx(this)
-        val panelHeightPx = SettingsManager.getHeightPx(this)
-        val panelAlpha = SettingsManager.getAlpha(this)
-
-        Toast.makeText(this, "📐 Размер: ${panelWidthPx}x${panelHeightPx}px, Прозрачность: ${(panelAlpha*100).toInt()}%", Toast.LENGTH_LONG).show()
 
         // === КУРСОР ===
         cursorParams = WindowManager.LayoutParams(
@@ -77,17 +86,10 @@ class MyAccessibilityService : AccessibilityService() {
         }
         windowManager?.addView(cursorView, cursorParams)
 
-        // === ПАНЕЛЬ (с нашими размерами!) ===
-        controlPanel = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.argb(230, 20, 20, 20))
-            setPadding(15, 15, 15, 15)
-            alpha = panelAlpha  // ← применяем прозрачность
-        }
-
-        val panelParams = WindowManager.LayoutParams(
-            panelWidthPx,   // ← ширина из настроек
-            panelHeightPx,  // ← высота из настроек
+        // === ПАРАМЕТРЫ ПАНЕЛИ (создаём один раз, размеры обновляются при перестройке) ===
+        panelParams = WindowManager.LayoutParams(
+            SettingsManager.getWidthPx(this),
+            SettingsManager.getHeightPx(this),
             overlayType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
@@ -98,11 +100,59 @@ class MyAccessibilityService : AccessibilityService() {
             y = 200
         }
 
+        // === ПЕРВАЯ СБОРКА ПАНЕЛИ ===
+        buildPanel()
+
+        // === ТРИГГЕР ===
+        triggerButton = TextView(this).apply {
+            text = "🕹️"
+            textSize = 28f
+            gravity = Gravity.CENTER
+            setBackgroundColor(Color.argb(200, 0, 150, 255))
+            setTextColor(Color.WHITE)
+            isClickable = true
+            setOnClickListener { togglePanel(true) }
+        }
+
+        val triggerParams = WindowManager.LayoutParams(
+            100, 100, overlayType,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.BOTTOM or Gravity.END
+            x = 20
+            y = 20
+        }
+        windowManager?.addView(triggerButton, triggerParams)
+
+        // === РЕГИСТРИРУЕМ ПРИЁМНИК СИГНАЛА ===
+        val filter = IntentFilter(SettingsManager.ACTION_REBUILD)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(rebuildReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(rebuildReceiver, filter)
+        }
+
+        Toast.makeText(this, "✅ Пульт обновлён!", Toast.LENGTH_SHORT).show()
+    }
+
+    // === СБОРКА ПАНЕЛИ (вызывается при старте и при перестройке) ===
+    private fun buildPanel() {
+        val panelAlpha = SettingsManager.getAlpha(this)
+
+        controlPanel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.argb(230, 20, 20, 20))
+            setPadding(15, 15, 15, 15)
+            alpha = panelAlpha
+        }
+
         // --- ТАЧПАД ---
         val trackpad = FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                0, 1f  // занимает всё свободное место в панели
+                0, 1f
             ).apply { bottomMargin = 20 }
             val border = GradientDrawable()
             border.setColor(Color.argb(255, 50, 50, 50))
@@ -177,7 +227,7 @@ class MyAccessibilityService : AccessibilityService() {
         row2.addView(createBtn("⬇️", Color.argb(255, 60, 60, 60)) { performSwipe(0, -500) }, createWeightedParams())
         row2.addView(createBtn("🏠", Color.argb(255, 100, 100, 0)) { teleportCursor(540f, 1200f) }, createWeightedParams())
         row2.addView(createBtn("⬆⬆", Color.argb(255, 100, 0, 100)) { teleportCursor(540f, 80f) }, createWeightedParams())
-        
+
         val mainBtn = createBtn("👆 Тап", Color.argb(255, 0, 100, 200)) {
             performTap(cursorX + 40f, cursorY + 40f)
         }
@@ -194,31 +244,25 @@ class MyAccessibilityService : AccessibilityService() {
         controlPanel?.addView(createBtn("❌", Color.argb(255, 150, 50, 50)) { togglePanel(false) }, createWeightedParams())
 
         windowManager?.addView(controlPanel, panelParams)
+    }
 
-        // === ТРИГГЕР ===
-        triggerButton = TextView(this).apply {
-            text = "🕹️"
-            textSize = 28f
-            gravity = Gravity.CENTER
-            setBackgroundColor(Color.argb(200, 0, 150, 255))
-            setTextColor(Color.WHITE)
-            isClickable = true
-            setOnClickListener { togglePanel(true) }
+    // === ПЕРЕСТРОЙКА ПАНЕЛИ ПО НОВЫМ НАСТРОЙКАМ ===
+    private fun rebuildPanel() {
+        // 1. Удаляем старую панель
+        try {
+            controlPanel?.let { windowManager?.removeView(it) }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
 
-        val triggerParams = WindowManager.LayoutParams(
-            100, 100, overlayType,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.BOTTOM or Gravity.END
-            x = 20
-            y = 20
-        }
-        windowManager?.addView(triggerButton, triggerParams)
+        // 2. Обновляем размеры в параметрах
+        panelParams.width = SettingsManager.getWidthPx(this)
+        panelParams.height = SettingsManager.getHeightPx(this)
 
-        Toast.makeText(this, "✅ Пульт обновлён!", Toast.LENGTH_SHORT).show()
+        // 3. Собираем панель заново (она сама прочитает прозрачность)
+        buildPanel()
+
+        Toast.makeText(this, "🔄 Пульт перестроен!", Toast.LENGTH_SHORT).show()
     }
 
     // === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===
@@ -327,7 +371,7 @@ class MyAccessibilityService : AccessibilityService() {
         val cy = cursorY + 40f
         val path1 = Path()
         val path2 = Path()
-        
+
         if (zoomIn) {
             path1.moveTo(cx - 50, cy); path1.lineTo(cx - 250, cy)
             path2.moveTo(cx + 50, cy); path2.lineTo(cx + 250, cy)
@@ -335,15 +379,15 @@ class MyAccessibilityService : AccessibilityService() {
             path1.moveTo(cx - 250, cy); path1.lineTo(cx - 50, cy)
             path2.moveTo(cx + 250, cy); path2.lineTo(cx + 50, cy)
         }
-        
+
         val gesture = GestureDescription.Builder()
             .addStroke(GestureDescription.StrokeDescription(path1, 0, 300))
             .addStroke(GestureDescription.StrokeDescription(path2, 0, 300))
             .build()
         dispatchGesture(gesture, object : GestureResultCallback() {
             override fun onCompleted(gesture: GestureDescription?) {
-                Toast.makeText(this@MyAccessibilityService, 
-                    if (zoomIn) "🔍 Увеличено!" else "🔎 Уменьшено!", 
+                Toast.makeText(this@MyAccessibilityService,
+                    if (zoomIn) "🔍 Увеличено!" else "🔎 Уменьшено!",
                     Toast.LENGTH_SHORT).show()
             }
             override fun onCancelled(gesture: GestureDescription?) {
@@ -353,13 +397,20 @@ class MyAccessibilityService : AccessibilityService() {
     }
 
     override fun onInterrupt() {}
+
     override fun onDestroy() {
         super.onDestroy()
+        try {
+            unregisterReceiver(rebuildReceiver)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
         try {
             windowManager?.removeView(triggerButton)
             windowManager?.removeView(controlPanel)
             windowManager?.removeView(cursorView)
         } catch (e: Exception) { e.printStackTrace() }
     }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
 }
