@@ -48,6 +48,13 @@ class MyAccessibilityService : AccessibilityService() {
             WindowManager.LayoutParams.TYPE_PHONE
         }
 
+        // === ЧИТАЕМ НАСТРОЙКИ ИЗ ПАМЯТИ ===
+        val panelWidthPx = SettingsManager.getWidthPx(this)
+        val panelHeightPx = SettingsManager.getHeightPx(this)
+        val panelAlpha = SettingsManager.getAlpha(this)
+
+        Toast.makeText(this, "📐 Размер: ${panelWidthPx}x${panelHeightPx}px, Прозрачность: ${(panelAlpha*100).toInt()}%", Toast.LENGTH_LONG).show()
+
         // === КУРСОР ===
         cursorParams = WindowManager.LayoutParams(
             80, 80, overlayType,
@@ -70,16 +77,17 @@ class MyAccessibilityService : AccessibilityService() {
         }
         windowManager?.addView(cursorView, cursorParams)
 
-        // === ПАНЕЛЬ ===
+        // === ПАНЕЛЬ (с нашими размерами!) ===
         controlPanel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.argb(230, 20, 20, 20))
             setPadding(15, 15, 15, 15)
+            alpha = panelAlpha  // ← применяем прозрачность
         }
 
         val panelParams = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            panelWidthPx,   // ← ширина из настроек
+            panelHeightPx,  // ← высота из настроек
             overlayType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
@@ -92,7 +100,10 @@ class MyAccessibilityService : AccessibilityService() {
 
         // --- ТАЧПАД ---
         val trackpad = FrameLayout(this).apply {
-            layoutParams = LinearLayout.LayoutParams(250, 250).apply { bottomMargin = 20 }
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0, 1f  // занимает всё свободное место в панели
+            ).apply { bottomMargin = 20 }
             val border = GradientDrawable()
             border.setColor(Color.argb(255, 50, 50, 50))
             border.setStroke(4, Color.argb(255, 100, 100, 100))
@@ -134,7 +145,6 @@ class MyAccessibilityService : AccessibilityService() {
                     val dy = event.y - lastTouchY
                     cursorX += dx * sensitivity
                     cursorY += dy * sensitivity
-                    // Увеличили диапазон: теперь курсор достаёт до статус-бара
                     cursorX = cursorX.coerceIn(0f, 1080f)
                     cursorY = cursorY.coerceIn(0f, 3000f)
                     cursorParams.x = cursorX.toInt()
@@ -153,30 +163,21 @@ class MyAccessibilityService : AccessibilityService() {
         }
         controlPanel?.addView(trackpad)
 
-        // --- РЯД 1: Свайпы (НАПРАВЛЕНИЯ ИСПРАВЛЕНЫ) ---
+        // --- РЯД 1: Свайпы ---
         val row1 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        // ⬅️ = свайп вправо (контент едет влево)
         row1.addView(createBtn("⬅️", Color.argb(255, 60, 60, 60)) { performSwipe(400, 0) }, createWeightedParams())
-        // ➡️ = свайп влево (контент едет вправо)
         row1.addView(createBtn("➡️", Color.argb(255, 60, 60, 60)) { performSwipe(-400, 0) }, createWeightedParams())
-        // ➖ Уменьшить
         row1.addView(createBtn("➖", Color.argb(255, 60, 60, 60)) { performPinch(false) }, createWeightedParams())
-        // ➕ Увеличить
         row1.addView(createBtn("➕", Color.argb(255, 60, 60, 60)) { performPinch(true) }, createWeightedParams())
         controlPanel?.addView(row1)
 
-        // --- РЯД 2: Скролл + Телепорт + Главная кнопка ---
+        // --- РЯД 2: Скролл + Телепорт + Тап ---
         val row2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        // ⬆️ = свайп вниз (контент едет вверх — к началу страницы)
         row2.addView(createBtn("⬆️", Color.argb(255, 60, 60, 60)) { performSwipe(0, 500) }, createWeightedParams())
-        // ⬇️ = свайп вверх (контент едет вниз — к концу страницы)
         row2.addView(createBtn("⬇️", Color.argb(255, 60, 60, 60)) { performSwipe(0, -500) }, createWeightedParams())
-        // 🏠 Домой — вернуть курсор в центр
         row2.addView(createBtn("🏠", Color.argb(255, 100, 100, 0)) { teleportCursor(540f, 1200f) }, createWeightedParams())
-        // ⬆⬆ К статус-бару — телепорт курсора наверх
         row2.addView(createBtn("⬆⬆", Color.argb(255, 100, 0, 100)) { teleportCursor(540f, 80f) }, createWeightedParams())
         
-        // Главная кнопка (Тап / Меню)
         val mainBtn = createBtn("👆 Тап", Color.argb(255, 0, 100, 200)) {
             performTap(cursorX + 40f, cursorY + 40f)
         }
@@ -261,7 +262,6 @@ class MyAccessibilityService : AccessibilityService() {
         }
     }
 
-    // Телепорт курсора в нужную точку
     private fun teleportCursor(x: Float, y: Float) {
         cursorX = x
         cursorY = y
@@ -276,7 +276,6 @@ class MyAccessibilityService : AccessibilityService() {
         triggerButton?.visibility = if (show) View.GONE else View.VISIBLE
     }
 
-    // === ЖЕСТЫ ===
     private fun performTap(x: Float, y: Float) {
         val path = Path().apply { moveTo(x, y) }
         val gesture = GestureDescription.Builder()
@@ -323,7 +322,6 @@ class MyAccessibilityService : AccessibilityService() {
         }, null)
     }
 
-    // ЗУМ с увеличенным размахом (400px вместо 120px)
     private fun performPinch(zoomIn: Boolean) {
         val cx = cursorX + 40f
         val cy = cursorY + 40f
@@ -331,11 +329,9 @@ class MyAccessibilityService : AccessibilityService() {
         val path2 = Path()
         
         if (zoomIn) {
-            // Увеличение: пальцы расходятся от центра
             path1.moveTo(cx - 50, cy); path1.lineTo(cx - 250, cy)
             path2.moveTo(cx + 50, cy); path2.lineTo(cx + 250, cy)
         } else {
-            // Уменьшение: пальцы сходятся к центру
             path1.moveTo(cx - 250, cy); path1.lineTo(cx - 50, cy)
             path2.moveTo(cx + 250, cy); path2.lineTo(cx + 50, cy)
         }
