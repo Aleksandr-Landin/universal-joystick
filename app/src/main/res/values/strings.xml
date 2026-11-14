@@ -1,4 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Universal Joystick</string>
-    <string name="accessibility_service_description">Универсальный пульт для управления одной рукой. Сервис нужен только для эмуляции нажатий и не собирает ваши личные данные.</string>
+    <string name="accessibility_description">Пульт для управления телефоном одной рукой: джойстик, свайпы, зум.</string>
 </resources>
