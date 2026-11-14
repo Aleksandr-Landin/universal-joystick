@@ -8,6 +8,10 @@ object SettingsManager {
     private const val KEY_HEIGHT = "panel_height"
     private const val KEY_ALPHA = "panel_alpha"
 
+    // Наш общий «пароль» для сигнала перестройки.
+    // Должен быть одинаковым в настройках и в сервисе!
+    const val ACTION_REBUILD = "com.example.myjoystick.REBUILD_PANEL"
+
     private const val DEFAULT_WIDTH_DP = 250
     private const val DEFAULT_HEIGHT_DP = 350
     private const val DEFAULT_ALPHA = 80
@@ -31,7 +35,6 @@ object SettingsManager {
         return prefs.getInt(KEY_HEIGHT, DEFAULT_HEIGHT_DP)
     }
 
-    // НОВЫЕ МЕТОДЫ — возвращают пиксели (нужны для WindowManager)
     fun getWidthPx(context: Context): Int {
         val dp = getWidthDp(context)
         return dpToPx(context, dp)
