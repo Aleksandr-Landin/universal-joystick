@@ -1,5 +1,6 @@
 package com.example.myjoystick
 
+import android.content.Intent
 import android.os.Bundle
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
@@ -7,7 +8,7 @@ import androidx.appcompat.app.AppCompatActivity
 class SettingsActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
         val scrollView = ScrollView(this)
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -15,14 +16,14 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         val tvWidth = TextView(this).apply { text = "Ширина пульта (в dp):"; textSize = 18f }
-        val etWidth = EditText(this).apply { 
+        val etWidth = EditText(this).apply {
             hint = "Например, 250"
             inputType = android.text.InputType.TYPE_CLASS_NUMBER
             setText(SettingsManager.getWidthDp(this@SettingsActivity).toString())
         }
 
         val tvHeight = TextView(this).apply { text = "Высота пульта (в dp):"; textSize = 18f; setPadding(0, 30, 0, 0) }
-        val etHeight = EditText(this).apply { 
+        val etHeight = EditText(this).apply {
             hint = "Например, 350"
             inputType = android.text.InputType.TYPE_CLASS_NUMBER
             setText(SettingsManager.getHeightDp(this@SettingsActivity).toString())
@@ -31,7 +32,7 @@ class SettingsActivity : AppCompatActivity() {
         val currentAlpha = (SettingsManager.getAlpha(this@SettingsActivity) * 100).toInt()
         val tvAlpha = TextView(this).apply { text = "Прозрачность: $currentAlpha%"; textSize = 18f; setPadding(0, 30, 0, 0) }
         val seekBar = SeekBar(this).apply { max = 100; progress = currentAlpha }
-        
+
         seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 tvAlpha.text = "Прозрачность: $progress%"
@@ -40,7 +41,7 @@ class SettingsActivity : AppCompatActivity() {
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
 
-        val btnSave = Button(this).apply { 
+        val btnSave = Button(this).apply {
             text = "Сохранить и применить"
             setPadding(0, 50, 0, 0)
         }
@@ -61,8 +62,11 @@ class SettingsActivity : AppCompatActivity() {
             val alpha = seekBar.progress
 
             SettingsManager.saveSettings(this, width, height, alpha)
-            
-            Toast.makeText(this, "Настройки сохранены! Перезапусти сервис.", Toast.LENGTH_LONG).show()
+
+            // Отправляем сигнал сервису перестроить панель
+            sendBroadcast(Intent(SettingsManager.ACTION_REBUILD))
+
+            Toast.makeText(this, "Настройки применены! 🚀", Toast.LENGTH_SHORT).show()
             finish()
         }
     }
