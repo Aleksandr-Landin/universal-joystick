@@ -1,0 +1,39 @@
+package com.example.myjoystick
+
+import android.content.Context
+
+object SettingsManager {
+    private const val PREFS_NAME = "joystick_prefs"
+    private const val KEY_WIDTH = "panel_width"
+    private const val KEY_HEIGHT = "panel_height"
+    private const val KEY_ALPHA = "panel_alpha"
+
+    private const val DEFAULT_WIDTH_DP = 250
+    private const val DEFAULT_HEIGHT_DP = 350
+    private const val DEFAULT_ALPHA = 80
+
+    fun saveSettings(context: Context, widthDp: Int, heightDp: Int, alphaPercent: Int) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit()
+            .putInt(KEY_WIDTH, widthDp)
+            .putInt(KEY_HEIGHT, heightDp)
+            .putInt(KEY_ALPHA, alphaPercent)
+            .apply()
+    }
+
+    fun getWidthDp(context: Context): Int {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getInt(KEY_WIDTH, DEFAULT_WIDTH_DP)
+    }
+
+    fun getHeightDp(context: Context): Int {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getInt(KEY_HEIGHT, DEFAULT_HEIGHT_DP)
+    }
+
+    fun getAlpha(context: Context): Float {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val percent = prefs.getInt(KEY_ALPHA, DEFAULT_ALPHA)
+        return percent / 100f
+    }
+}
