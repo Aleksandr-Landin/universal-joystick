@@ -31,9 +31,25 @@ object SettingsManager {
         return prefs.getInt(KEY_HEIGHT, DEFAULT_HEIGHT_DP)
     }
 
+    // НОВЫЕ МЕТОДЫ — возвращают пиксели (нужны для WindowManager)
+    fun getWidthPx(context: Context): Int {
+        val dp = getWidthDp(context)
+        return dpToPx(context, dp)
+    }
+
+    fun getHeightPx(context: Context): Int {
+        val dp = getHeightDp(context)
+        return dpToPx(context, dp)
+    }
+
     fun getAlpha(context: Context): Float {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val percent = prefs.getInt(KEY_ALPHA, DEFAULT_ALPHA)
         return percent / 100f
+    }
+
+    private fun dpToPx(context: Context, dp: Int): Int {
+        val density = context.resources.displayMetrics.density
+        return (dp * density).toInt()
     }
 }
