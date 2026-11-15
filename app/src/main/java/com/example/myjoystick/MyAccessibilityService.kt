@@ -1,6 +1,7 @@
 package com.example.myjoystick
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityService.GestureResultCallback // <-- ИСПРАВЛЕННЫЙ ИМПОРТ
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.accessibilityservice.GestureDescription
 import android.content.BroadcastReceiver
@@ -23,11 +24,11 @@ import android.widget.TextView
 import android.widget.Toast
 
 class MyAccessibilityService : AccessibilityService() {
+
     private var windowManager: WindowManager? = null
     private var controlPanelRoot: LinearLayout? = null
     private var cursorView: View? = null
     private var triggerButton: View? = null
-
     private var cursorX = 540f
     private var cursorY = 1200f
     private lateinit var cursorParams: WindowManager.LayoutParams
@@ -47,7 +48,6 @@ class MyAccessibilityService : AccessibilityService() {
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
             flags = AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
         }
-
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         overlayType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
@@ -60,8 +60,8 @@ class MyAccessibilityService : AccessibilityService() {
         cursorParams = WindowManager.LayoutParams(
             80, 80, overlayType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
@@ -80,33 +80,27 @@ class MyAccessibilityService : AccessibilityService() {
         // 2. РАСЧЁТ ФИКСИРОВАННОЙ ПОЗИЦИИ ДЛЯ ТАЧПАДА
         val displayMetrics = resources.displayMetrics
         val screenHeight = displayMetrics.heightPixels
-        
         val tH = SettingsManager.getTrackpadH(this)
         val bH = SettingsManager.getButtonsH(this)
         val bottomMarginPx = 40 // Отступ от самого низа экрана
-
-        // Вычисляем Y так, чтобы даже в развёрнутом виде панель была у нижнего края.
-        // При сворачивании этот Y не изменится, поэтому тачпад останется на месте!
         val fixedTopY = screenHeight - tH - bH - bottomMarginPx
-
         rootParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             overlayType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.TOP or Gravity.END // <-- ПРИВЯЗКА К ВЕРХНЕМУ КРАЮ
+            gravity = Gravity.TOP or Gravity.END
             x = 20
-            y = fixedTopY // <-- ФИКСИРОВАННАЯ КООРДИНАТА
+            y = fixedTopY
         }
-
         buildPanel()
 
-        // 3. КНОПКА-ТРИГГЕР (показать/скрыть весь пульт)
+        // 3. КНОПКА-ТРИГГЕР
         triggerButton = TextView(this).apply {
-            text = "🕹️"
+            text = "⚙️"
             textSize = 28f
             gravity = Gravity.CENTER
             setBackgroundColor(Color.argb(200, 0, 150, 255))
@@ -117,7 +111,7 @@ class MyAccessibilityService : AccessibilityService() {
         val triggerParams = WindowManager.LayoutParams(
             100, 100, overlayType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.BOTTOM or Gravity.END
@@ -167,7 +161,6 @@ class MyAccessibilityService : AccessibilityService() {
                 setStroke(4, Color.argb(255, 100, 100, 100))
             }
             background = border
-
             val hint = TextView(this@MyAccessibilityService).apply {
                 text = "ВОДИ ЗДЕСЬ\nдля курсора"
                 gravity = Gravity.CENTER
@@ -180,10 +173,8 @@ class MyAccessibilityService : AccessibilityService() {
                 isClickable = false; isFocusable = false; isEnabled = false
             }
             addView(hint)
-
-            // Кнопка сворачивания/разворачивания панели кнопок
             val toggleBtn = TextView(this@MyAccessibilityService).apply {
-                text = if (isExpanded) "🔼" else "🔽"
+                text = if (isExpanded) "▼" else "▲"
                 textSize = 20f
                 gravity = Gravity.CENTER
                 setBackgroundColor(Color.argb(180, 100, 100, 100))
@@ -204,10 +195,11 @@ class MyAccessibilityService : AccessibilityService() {
 
         var lastTouchX = 0f; var lastTouchY = 0f
         val sensitivity = 2.0f
-
         trackpad.setOnTouchListener { v, event ->
             when (event.action) {
-                MotionEvent.ACTION_DOWN -> { lastTouchX = event.x; lastTouchY = event.y; true }
+                MotionEvent.ACTION_DOWN -> {
+                    lastTouchX = event.x; lastTouchY = event.y; true
+                }
                 MotionEvent.ACTION_MOVE -> {
                     cursorX += (event.x - lastTouchX) * sensitivity
                     cursorY += (event.y - lastTouchY) * sensitivity
@@ -215,8 +207,7 @@ class MyAccessibilityService : AccessibilityService() {
                     cursorY = cursorY.coerceIn(0f, 3000f)
                     cursorParams.x = cursorX.toInt(); cursorParams.y = cursorY.toInt()
                     windowManager?.updateViewLayout(cursorView, cursorParams)
-                    lastTouchX = event.x; lastTouchY = event.y
-                    true
+                    lastTouchX = event.x; lastTouchY = event.y; true
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> true
                 else -> false
@@ -233,10 +224,12 @@ class MyAccessibilityService : AccessibilityService() {
             visibility = if (isExpanded) View.VISIBLE else View.GONE
         }
 
-        // Ряд 1 (занимает 50% высоты панели кнопок)
-        val row1 = LinearLayout(this).apply { 
+        // Ряд 1
+        val row1 = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+            )
         }
         row1.addView(createBtn("⬅️", Color.argb(255, 60, 60, 60)) { performSwipe(400, 0) })
         row1.addView(createBtn("➡️", Color.argb(255, 60, 60, 60)) { performSwipe(-400, 0) })
@@ -244,14 +237,16 @@ class MyAccessibilityService : AccessibilityService() {
         row1.addView(createBtn("➕", Color.argb(255, 60, 60, 60)) { performPinch(true) })
         buttonPanel.addView(row1)
 
-        // Ряд 2 (занимает 50% высоты панели кнопок)
-        val row2 = LinearLayout(this).apply { 
+        // Ряд 2
+        val row2 = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+            )
         }
         row2.addView(createBtn("⬆️", Color.argb(255, 60, 60, 60)) { performSwipe(0, 500) })
         row2.addView(createBtn("⬇️", Color.argb(255, 60, 60, 60)) { performSwipe(0, -500) })
-        row2.addView(createBtn("🏠", Color.argb(255, 100, 100, 0)) { teleportCursor(540f, 1200f) })
+        row2.addView(createBtn("🎯", Color.argb(255, 100, 100, 0)) { teleportCursor(540f, 1200f) })
         row2.addView(createBtn("👆 Тап", Color.argb(255, 0, 100, 200)) { performTap(cursorX + 40f, cursorY + 40f) })
         buttonPanel.addView(row2)
 
@@ -260,9 +255,11 @@ class MyAccessibilityService : AccessibilityService() {
     }
 
     private fun rebuildPanel() {
-        try { controlPanelRoot?.let { windowManager?.removeView(it) } } catch (e: Exception) {}
+        try {
+            controlPanelRoot?.let { windowManager?.removeView(it) }
+        } catch (e: Exception) {}
         buildPanel()
-        Toast.makeText(this, "🔄 Пульт перестроен!", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "⚙️ Пульт перестроен!", Toast.LENGTH_SHORT).show()
     }
 
     private fun createBtn(text: String, bgColor: Int, onClick: () -> Unit): TextView {
@@ -279,9 +276,15 @@ class MyAccessibilityService : AccessibilityService() {
             isClickable = true; isFocusable = true; isFocusableInTouchMode = true
             setOnTouchListener { v, event ->
                 when (event.action) {
-                    MotionEvent.ACTION_DOWN -> { v.setBackgroundColor(Color.argb(255, 150, 150, 150)); true }
-                    MotionEvent.ACTION_UP -> { v.setBackgroundColor(bgColor); onClick(); false }
-                    MotionEvent.ACTION_CANCEL -> { v.setBackgroundColor(bgColor); false }
+                    MotionEvent.ACTION_DOWN -> {
+                        v.setBackgroundColor(Color.argb(255, 150, 150, 150)); true
+                    }
+                    MotionEvent.ACTION_UP -> {
+                        v.setBackgroundColor(bgColor); onClick(); false
+                    }
+                    MotionEvent.ACTION_CANCEL -> {
+                        v.setBackgroundColor(bgColor); false
+                    }
                     else -> false
                 }
             }
@@ -296,29 +299,45 @@ class MyAccessibilityService : AccessibilityService() {
 
     private fun performTap(x: Float, y: Float) {
         val path = Path().apply { moveTo(x, y) }
-        dispatchGesture(GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 100)).build(), object : GestureResultCallback() {
-            override fun onCompleted(gesture: GestureDescription?) { Toast.makeText(this@MyAccessibilityService, "✅ Тап!", Toast.LENGTH_SHORT).show() }
-            override fun onCancelled(gesture: GestureDescription?) {}
-        }, null)
+        dispatchGesture(GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 100)).build(),
+            object : GestureResultCallback() {
+                override fun onCompleted(gesture: GestureDescription?) {
+                    Toast.makeText(this@MyAccessibilityService, "✅ Тап!", Toast.LENGTH_SHORT).show()
+                }
+                override fun onCancelled(gesture: GestureDescription?) {}
+            }, null)
     }
 
     private fun performSwipe(dx: Int, dy: Int) {
         val path = Path().apply { moveTo(540f, 1200f); lineTo(540f + dx, 1200f + dy) }
-        dispatchGesture(GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 300)).build(), object : GestureResultCallback() {
-            override fun onCompleted(gesture: GestureDescription?) { Toast.makeText(this@MyAccessibilityService, "✅ Скролл!", Toast.LENGTH_SHORT).show() }
-            override fun onCancelled(gesture: GestureDescription?) {}
-        }, null)
+        dispatchGesture(GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 300)).build(),
+            object : GestureResultCallback() {
+                override fun onCompleted(gesture: GestureDescription?) {
+                    Toast.makeText(this@MyAccessibilityService, "✅ Скролл!", Toast.LENGTH_SHORT).show()
+                }
+                override fun onCancelled(gesture: GestureDescription?) {}
+            }, null)
     }
 
     private fun performPinch(zoomIn: Boolean) {
         val cx = cursorX + 40f; val cy = cursorY + 40f
         val p1 = Path(); val p2 = Path()
-        if (zoomIn) { p1.moveTo(cx - 50, cy); p1.lineTo(cx - 250, cy); p2.moveTo(cx + 50, cy); p2.lineTo(cx + 250, cy) } 
-        else { p1.moveTo(cx - 250, cy); p1.lineTo(cx - 50, cy); p2.moveTo(cx + 250, cy); p2.lineTo(cx + 50, cy) }
-        dispatchGesture(GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(p1, 0, 300)).addStroke(GestureDescription.StrokeDescription(p2, 0, 300)).build(), object : GestureResultCallback() {
-            override fun onCompleted(gesture: GestureDescription?) { Toast.makeText(this@MyAccessibilityService, if (zoomIn) "🔍 Увеличено!" else "🔎 Уменьшено!", Toast.LENGTH_SHORT).show() }
-            override fun onCancelled(gesture: GestureDescription?) {}
-        }, null)
+        if (zoomIn) {
+            p1.moveTo(cx - 50, cy); p1.lineTo(cx - 250, cy)
+            p2.moveTo(cx + 50, cy); p2.lineTo(cx + 250, cy)
+        } else {
+            p1.moveTo(cx - 250, cy); p1.lineTo(cx - 50, cy)
+            p2.moveTo(cx + 250, cy); p2.lineTo(cx + 50, cy)
+        }
+        dispatchGesture(GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(p1, 0, 300))
+            .addStroke(GestureDescription.StrokeDescription(p2, 0, 300)).build(),
+            object : GestureResultCallback() {
+                override fun onCompleted(gesture: GestureDescription?) {
+                    Toast.makeText(this@MyAccessibilityService, if (zoomIn) "🔍 Увеличено!" else "🔍 Уменьшено!", Toast.LENGTH_SHORT).show()
+                }
+                override fun onCancelled(gesture: GestureDescription?) {}
+            }, null)
     }
 
     override fun onInterrupt() {}
@@ -331,5 +350,6 @@ class MyAccessibilityService : AccessibilityService() {
             windowManager?.removeView(cursorView)
         } catch (e: Exception) {}
     }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
 }
