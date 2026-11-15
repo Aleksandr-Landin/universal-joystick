@@ -21,6 +21,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import kotlin.math.maxOf
 
 class MyAccessibilityService : AccessibilityService() {
 
@@ -28,12 +29,11 @@ class MyAccessibilityService : AccessibilityService() {
     private var triggerButton: View? = null
     private var controlPanel: LinearLayout? = null
     private var cursorView: View? = null
-    private var expandButton: View? = null  // Кнопка ⚙️ для выдвижения панели
-
+    private var expandButton: View? = null
+    
     private var cursorX = 540f
     private var cursorY = 1200f
     private lateinit var cursorParams: WindowManager.LayoutParams
-
     private lateinit var panelParams: WindowManager.LayoutParams
     private var overlayType = 0
     private var isPanelExpanded = false
@@ -48,15 +48,14 @@ class MyAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-
         val info = AccessibilityServiceInfo().apply {
             eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
             flags = AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
         }
         serviceInfo = info
-
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+
         overlayType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
         } else {
@@ -88,9 +87,11 @@ class MyAccessibilityService : AccessibilityService() {
 
         // === ПАРАМЕТРЫ ПАНЕЛИ ===
         isPanelExpanded = SettingsManager.isPanelExpanded(this)
+        
+        // Размеры будут обновлены в buildPanel(), здесь задаём начальные
         panelParams = WindowManager.LayoutParams(
-            SettingsManager.getWidthPx(this),
-            WindowManager.LayoutParams.WRAP_CONTENT,  // Высота подстраивается под содержимое
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
             overlayType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
@@ -137,24 +138,34 @@ class MyAccessibilityService : AccessibilityService() {
     }
 
     private fun buildPanel() {
-        val panelAlpha = SettingsManager.getAlpha(this)
+        val trackpadWidthPx = SettingsManager.getTrackpadWidthPx(this)
         val trackpadHeightPx = SettingsManager.getTrackpadHeightPx(this)
-        val buttonHeightPx = SettingsManager.getButtonHeightPx(this)
+        val buttonPanelWidthPx = SettingsManager.getButtonPanelWidthPx(this)
+        val buttonPanelHeightPx = SettingsManager.getButtonPanelHeightPx(this)
+
+        // ГЛАВНОЕ ИСПРАВЛЕНИЕ: фиксируем общую высоту панели. 
+        // При скрытии кнопок высота контейнера не меняется, и тачпад не "падает" вниз.
+        val maxWidth = maxOf(trackpadWidthPx, buttonPanelWidthPx)
+        val maxHeight = trackpadHeightPx + buttonPanelHeightPx
+
+        panelParams.width = maxWidth
+        panelParams.height = maxHeight
 
         controlPanel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.argb(230, 20, 20, 20))
             setPadding(15, 15, 15, 15)
-            alpha = panelAlpha
         }
 
-        // --- ТАЧПАД + КНОПКА РАЗВЁРТЫВАНИЯ ---
+        // --- ТАЧПАД ---
         val trackpadContainer = FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
+                trackpadWidthPx,
                 trackpadHeightPx
-            ).apply { bottomMargin = 10 }
-
+            ).apply { 
+                bottomMargin = 10
+                gravity = Gravity.CENTER_HORIZONTAL 
+            }
             val border = GradientDrawable()
             border.setColor(Color.argb(255, 50, 50, 50))
             border.setStroke(4, Color.argb(255, 100, 100, 100))
@@ -175,7 +186,6 @@ class MyAccessibilityService : AccessibilityService() {
             }
             addView(hint)
 
-            // Кнопка ⚙️ в правом нижнем углу тачпада
             expandButton = TextView(this@MyAccessibilityService).apply {
                 text = "⚙️"
                 textSize = 20f
@@ -227,31 +237,41 @@ class MyAccessibilityService : AccessibilityService() {
             }
             false
         }
+
         controlPanel?.addView(trackpadContainer)
 
         // --- ПАНЕЛЬ КНОПОК (выдвижная) ---
         if (isPanelExpanded) {
             val buttonPanel = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    buttonPanelWidthPx,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    gravity = Gravity.CENTER_HORIZONTAL
+                }
                 visibility = View.VISIBLE
             }
 
+            // Динамически рассчитываем высоту одной кнопки, чтобы они вписались в заданную высоту панели
+            val dynamicButtonHeight = maxOf(50, buttonPanelHeightPx / 3)
+
             // Ряд 1: Свайпы
             val row1 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            row1.addView(createBtn("⬅️", Color.argb(255, 60, 60, 60), buttonHeightPx) { performSwipe(400, 0) })
-            row1.addView(createBtn("➡️", Color.argb(255, 60, 60, 60), buttonHeightPx) { performSwipe(-400, 0) })
-            row1.addView(createBtn("➖", Color.argb(255, 60, 60, 60), buttonHeightPx) { performPinch(false) })
-            row1.addView(createBtn("➕", Color.argb(255, 60, 60, 60), buttonHeightPx) { performPinch(true) })
+            row1.addView(createBtn("⬅️", Color.argb(255, 60, 60, 60), dynamicButtonHeight) { performSwipe(400, 0) })
+            row1.addView(createBtn("➡️", Color.argb(255, 60, 60, 60), dynamicButtonHeight) { performSwipe(-400, 0) })
+            row1.addView(createBtn("➖", Color.argb(255, 60, 60, 60), dynamicButtonHeight) { performPinch(false) })
+            row1.addView(createBtn("➕", Color.argb(255, 60, 60, 60), dynamicButtonHeight) { performPinch(true) })
             buttonPanel.addView(row1)
 
             // Ряд 2: Скролл + Телепорт + Тап
             val row2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            row2.addView(createBtn("⬆️", Color.argb(255, 60, 60, 60), buttonHeightPx) { performSwipe(0, 500) })
-            row2.addView(createBtn("⬇️", Color.argb(255, 60, 60, 60), buttonHeightPx) { performSwipe(0, -500) })
-            row2.addView(createBtn("🏠", Color.argb(255, 100, 100, 0), buttonHeightPx) { teleportCursor(540f, 1200f) })
-            row2.addView(createBtn("⬆⬆", Color.argb(255, 100, 0, 100), buttonHeightPx) { teleportCursor(540f, 80f) })
-
-            val mainBtn = createBtn("👆 Тап", Color.argb(255, 0, 100, 200), buttonHeightPx) {
+            row2.addView(createBtn("⬆️", Color.argb(255, 60, 60, 60), dynamicButtonHeight) { performSwipe(0, 500) })
+            row2.addView(createBtn("⬇️", Color.argb(255, 60, 60, 60), dynamicButtonHeight) { performSwipe(0, -500) })
+            row2.addView(createBtn("🏠", Color.argb(255, 100, 100, 0), dynamicButtonHeight) { teleportCursor(540f, 1200f) })
+            row2.addView(createBtn("⬆⬆", Color.argb(255, 100, 0, 100), dynamicButtonHeight) { teleportCursor(540f, 80f) })
+            
+            val mainBtn = createBtn("👆 Тап", Color.argb(255, 0, 100, 200), dynamicButtonHeight) {
                 performTap(cursorX + 40f, cursorY + 40f)
             }
             mainBtn.setOnLongClickListener {
@@ -262,7 +282,7 @@ class MyAccessibilityService : AccessibilityService() {
             buttonPanel.addView(row2)
 
             // Кнопка свернуть
-            buttonPanel.addView(createBtn("❌ Свернуть", Color.argb(255, 150, 50, 50), buttonHeightPx) { toggleExpand() })
+            buttonPanel.addView(createBtn("❌ Свернуть", Color.argb(255, 150, 50, 50), dynamicButtonHeight) { toggleExpand() })
 
             controlPanel?.addView(buttonPanel)
         }
@@ -282,8 +302,6 @@ class MyAccessibilityService : AccessibilityService() {
         } catch (e: Exception) {
             e.printStackTrace()
         }
-
-        panelParams.width = SettingsManager.getWidthPx(this)
         buildPanel()
         Toast.makeText(this, "🔄 Пульт перестроен!", Toast.LENGTH_SHORT).show()
     }
@@ -389,7 +407,6 @@ class MyAccessibilityService : AccessibilityService() {
         val cy = cursorY + 40f
         val path1 = Path()
         val path2 = Path()
-
         if (zoomIn) {
             path1.moveTo(cx - 50, cy); path1.lineTo(cx - 250, cy)
             path2.moveTo(cx + 50, cy); path2.lineTo(cx + 250, cy)
@@ -397,16 +414,13 @@ class MyAccessibilityService : AccessibilityService() {
             path1.moveTo(cx - 250, cy); path1.lineTo(cx - 50, cy)
             path2.moveTo(cx + 250, cy); path2.lineTo(cx + 50, cy)
         }
-
         val gesture = GestureDescription.Builder()
             .addStroke(GestureDescription.StrokeDescription(path1, 0, 300))
             .addStroke(GestureDescription.StrokeDescription(path2, 0, 300))
             .build()
         dispatchGesture(gesture, object : GestureResultCallback() {
             override fun onCompleted(gesture: GestureDescription?) {
-                Toast.makeText(this@MyAccessibilityService,
-                    if (zoomIn) "🔍 Увеличено!" else "🔎 Уменьшено!",
-                    Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MyAccessibilityService, if (zoomIn) "🔍 Увеличено!" else "🔎 Уменьшено!", Toast.LENGTH_SHORT).show()
             }
             override fun onCancelled(gesture: GestureDescription?) {
                 Toast.makeText(this@MyAccessibilityService, "❌ Зум не сработал", Toast.LENGTH_SHORT).show()
@@ -419,16 +433,3 @@ class MyAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         super.onDestroy()
         try {
-            unregisterReceiver(rebuildReceiver)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        try {
-            windowManager?.removeView(triggerButton)
-            windowManager?.removeView(controlPanel)
-            windowManager?.removeView(cursorView)
-        } catch (e: Exception) { e.printStackTrace() }
-    }
-
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
-}
