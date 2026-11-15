@@ -16,6 +16,7 @@ class SettingsActivity : AppCompatActivity() {
         }
         val prefs = getSharedPreferences("joystick_prefs", MODE_PRIVATE)
 
+        // Вспомогательная функция для создания полей
         fun addField(label: String, key: String, defaultVal: Int): EditText {
             val tv = TextView(this).apply { text = label; textSize = 18f; setPadding(0, 20, 0, 0) }
             val et = EditText(this).apply {
