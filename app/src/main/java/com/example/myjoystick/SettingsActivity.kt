@@ -16,7 +16,6 @@ class SettingsActivity : AppCompatActivity() {
         }
         val prefs = getSharedPreferences("joystick_prefs", MODE_PRIVATE)
 
-        // Вспомогательная функция для создания полей
         fun addField(label: String, key: String, defaultVal: Int): EditText {
             val tv = TextView(this).apply { text = label; textSize = 18f; setPadding(0, 20, 0, 0) }
             val et = EditText(this).apply {
@@ -32,7 +31,6 @@ class SettingsActivity : AppCompatActivity() {
         val etTW = addField("Ширина тачпада (dp):", "trackpad_w", 250)
         val etTH = addField("Высота тачпада (dp):", "trackpad_h", 150)
         val etBW = addField("Ширина панели кнопок (dp):", "buttons_w", 250)
-        val etBH = addField("Высота панели кнопок (dp):", "buttons_h", 150)
 
         val currentAlpha = (SettingsManager.getAlpha(this) * 100).toInt()
         val tvAlpha = TextView(this).apply { text = "Прозрачность: $currentAlpha%"; textSize = 18f; setPadding(0, 30, 0, 0) }
@@ -61,10 +59,9 @@ class SettingsActivity : AppCompatActivity() {
             val tw = etTW.text.toString().toIntOrNull() ?: 250
             val th = etTH.text.toString().toIntOrNull() ?: 150
             val bw = etBW.text.toString().toIntOrNull() ?: 250
-            val bh = etBH.text.toString().toIntOrNull() ?: 150
             val alpha = seekBar.progress
 
-            SettingsManager.saveSettings(this, tw, th, bw, bh, alpha)
+            SettingsManager.saveSettings(this, tw, th, bw, alpha)
             sendBroadcast(Intent(SettingsManager.ACTION_REBUILD))
             
             Toast.makeText(this, "Настройки применены! 🚀", Toast.LENGTH_SHORT).show()
