@@ -2,31 +2,35 @@ package com.example.myjoystick
 
 import android.content.Intent
 import android.os.Bundle
+import android.text.InputType
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 
 class SettingsActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         val scrollView = ScrollView(this)
-        val layout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(40, 60, 40, 40)
-        }
+        val layout = LinearLayout(this)
+        layout.orientation = LinearLayout.VERTICAL
+        layout.setPadding(40, 60, 40, 40)
+
         val prefs = getSharedPreferences("joystick_prefs", MODE_PRIVATE)
 
-        // Вспомогательная функция для создания полей
+        // Вспомогательная функция для создания полей ввода
         fun addField(label: String, key: String, defaultVal: Int): EditText {
-            val tv = TextView(this).apply {
-                text = label; textSize = 18f; setPadding(0, 20, 0, 0)
-            }
-            val et = EditText(this).apply {
-                hint = "Например, $defaultVal"
-                inputType = android.text.InputType.TYPE_CLASS_NUMBER
-                setText(prefs.getInt(key, defaultVal).toString())
-            }
+            val tv = TextView(this)
+            tv.text = label
+            tv.textSize = 18f
+            tv.setPadding(0, 20, 0, 0)
             layout.addView(tv)
+
+            val et = EditText(this)
+            et.hint = "Например, $defaultVal"
+            et.inputType = InputType.TYPE_CLASS_NUMBER
+            et.setText(prefs.getInt(key, defaultVal).toString())
             layout.addView(et)
+            
             return et
         }
 
@@ -36,14 +40,16 @@ class SettingsActivity : AppCompatActivity() {
         val etBH = addField("Высота панели кнопок (dp):", "buttons_h", 150)
 
         val currentAlpha = (SettingsManager.getAlpha(this) * 100).toInt()
-        val tvAlpha = TextView(this).apply {
-            text = "Прозрачность: $currentAlpha%"
-            textSize = 18f
-            setPadding(0, 30, 0, 0)
-        }
-        val seekBar = SeekBar(this).apply {
-            max = 100; progress = currentAlpha
-        }
+
+        val tvAlpha = TextView(this)
+        tvAlpha.text = "Прозрачность: $currentAlpha%"
+        tvAlpha.textSize = 18f
+        tvAlpha.setPadding(0, 30, 0, 0)
+        layout.addView(tvAlpha)
+
+        val seekBar = SeekBar(this)
+        seekBar.max = 100
+        seekBar.progress = currentAlpha
         seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 tvAlpha.text = "Прозрачность: $progress%"
@@ -51,16 +57,12 @@ class SettingsActivity : AppCompatActivity() {
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
-        layout.addView(tvAlpha)
         layout.addView(seekBar)
 
-        val btnSave = Button(this).apply {
-            text = "Сохранить и применить"
-            setPadding(0, 40, 0, 0)
-        }
+        val btnSave = Button(this)
+        btnSave.text = "Сохранить и применить"
+        btnSave.setPadding(0, 40, 0, 0)
         layout.addView(btnSave)
-        scrollView.addView(layout)
-        setContentView(scrollView)
 
         btnSave.setOnClickListener {
             val tw = etTW.text.toString().toIntOrNull() ?: 250
@@ -68,9 +70,14 @@ class SettingsActivity : AppCompatActivity() {
             val bw = etBW.text.toString().toIntOrNull() ?: 250
             val bh = etBH.text.toString().toIntOrNull() ?: 150
             val alpha = seekBar.progress
+
             SettingsManager.saveSettings(this, tw, th, bw, bh, alpha)
             sendBroadcast(Intent(SettingsManager.ACTION_REBUILD))
-            Toast.makeText(this, "Настройки применены! ", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Настройки применены! ✅", Toast.LENGTH_SHORT).show()
             finish()
         }
+
+        scrollView.addView(layout)
+        setContentView(scrollView)
     }
+}
