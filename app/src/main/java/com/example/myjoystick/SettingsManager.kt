@@ -5,43 +5,31 @@ import android.content.Context
 object SettingsManager {
     private const val PREFS_NAME = "joystick_prefs"
     private const val KEY_WIDTH = "panel_width"
-    private const val KEY_HEIGHT = "panel_height"
+    private const val KEY_TRACKPAD = "trackpad_size" // Новая переменная для квадрата тачпада
     private const val KEY_ALPHA = "panel_alpha"
 
-    // Наш общий «пароль» для сигнала перестройки.
-    // Должен быть одинаковым в настройках и в сервисе!
-    const val ACTION_REBUILD = "com.example.myjoystick.REBUILD_PANEL"
-
     private const val DEFAULT_WIDTH_DP = 250
-    private const val DEFAULT_HEIGHT_DP = 350
+    private const val DEFAULT_TRACKPAD_DP = 150
     private const val DEFAULT_ALPHA = 80
 
-    fun saveSettings(context: Context, widthDp: Int, heightDp: Int, alphaPercent: Int) {
+    const val ACTION_REBUILD = "com.example.myjoystick.REBUILD_PANEL"
+
+    fun saveSettings(context: Context, widthDp: Int, trackpadDp: Int, alphaPercent: Int) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit()
             .putInt(KEY_WIDTH, widthDp)
-            .putInt(KEY_HEIGHT, heightDp)
+            .putInt(KEY_TRACKPAD, trackpadDp)
             .putInt(KEY_ALPHA, alphaPercent)
             .apply()
     }
 
-    fun getWidthDp(context: Context): Int {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getInt(KEY_WIDTH, DEFAULT_WIDTH_DP)
-    }
-
-    fun getHeightDp(context: Context): Int {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getInt(KEY_HEIGHT, DEFAULT_HEIGHT_DP)
-    }
-
     fun getWidthPx(context: Context): Int {
-        val dp = getWidthDp(context)
+        val dp = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getInt(KEY_WIDTH, DEFAULT_WIDTH_DP)
         return dpToPx(context, dp)
     }
 
-    fun getHeightPx(context: Context): Int {
-        val dp = getHeightDp(context)
+    fun getTrackpadSizePx(context: Context): Int {
+        val dp = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getInt(KEY_TRACKPAD, DEFAULT_TRACKPAD_DP)
         return dpToPx(context, dp)
     }
 
