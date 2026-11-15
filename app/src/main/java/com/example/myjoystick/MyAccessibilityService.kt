@@ -87,7 +87,6 @@ class MyAccessibilityService : AccessibilityService() {
             WindowManager.LayoutParams.TYPE_PHONE
         }
 
-        // === КУРСОР ===
         cursorParams = WindowManager.LayoutParams(
             80, 80, overlayType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
@@ -108,11 +107,11 @@ class MyAccessibilityService : AccessibilityService() {
         }
         windowManager?.addView(cursorView, cursorParams)
 
-        // === ФИКСИРОВАННАЯ ПОЗИЦИЯ ПАНЕЛИ ===
         val dm = resources.displayMetrics
         val screenHeight = dm.heightPixels
         val tH = SettingsManager.getTrackpadH(this)
-        val fixedTopY = (screenHeight - tH - 200 - 40).coerceAtLeast(0)
+        val bH = SettingsManager.getButtonsH(this)
+        val fixedTopY = (screenHeight - tH - bH - 40).coerceAtLeast(0)
 
         rootParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -129,7 +128,6 @@ class MyAccessibilityService : AccessibilityService() {
 
         buildPanel()
 
-        // === ТРИГГЕР ===
         triggerButton = TextView(this).apply {
             text = "🕹️"
             textSize = 28f
@@ -168,6 +166,7 @@ class MyAccessibilityService : AccessibilityService() {
         val tW = SettingsManager.getTrackpadW(this)
         val tH = SettingsManager.getTrackpadH(this)
         val bW = SettingsManager.getButtonsW(this)
+        val bH = SettingsManager.getButtonsH(this)
         val isExpanded = SettingsManager.isExpanded(this)
 
         controlPanelRoot = LinearLayout(this).apply {
@@ -178,7 +177,6 @@ class MyAccessibilityService : AccessibilityService() {
             visibility = View.VISIBLE
         }
 
-        // === ТАЧПАД ===
         val trackpad = FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(tW, tH).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
@@ -276,10 +274,9 @@ class MyAccessibilityService : AccessibilityService() {
         }
         controlPanelRoot?.addView(trackpad)
 
-        // === ПАНЕЛЬ КНОПОК (WRAP_CONTENT ПО ВЫСОТЕ — НЕТ ПУСТОТЫ!) ===
         val buttonPanel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            layoutParams = LinearLayout.LayoutParams(bW, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            layoutParams = LinearLayout.LayoutParams(bW, bH).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
             }
             visibility = if (isExpanded) View.VISIBLE else View.GONE
@@ -287,7 +284,7 @@ class MyAccessibilityService : AccessibilityService() {
 
         val row1 = LinearLayout(this).apply { 
             orientation = LinearLayout.HORIZONTAL
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 150)
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
         }
         row1.addView(createBtn("⬅️", Color.argb(255, 60, 60, 60)) { performSwipe(400, 0) })
         row1.addView(createBtn("➡️", Color.argb(255, 60, 60, 60)) { performSwipe(-400, 0) })
@@ -297,7 +294,7 @@ class MyAccessibilityService : AccessibilityService() {
 
         val row2 = LinearLayout(this).apply { 
             orientation = LinearLayout.HORIZONTAL
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 150)
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
         }
         row2.addView(createBtn("⬆️", Color.argb(255, 60, 60, 60)) { performSwipe(0, 500) })
         row2.addView(createBtn("⬇️", Color.argb(255, 60, 60, 60)) { performSwipe(0, -500) })
