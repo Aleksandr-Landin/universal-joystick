@@ -38,11 +38,9 @@ class MyAccessibilityService : AccessibilityService() {
     private lateinit var rootParams: WindowManager.LayoutParams
     private var overlayType = 0
 
-    // === МЕНЮ РЕДАКТИРОВАНИЯ ===
     private var editMenu: LinearLayout? = null
     private var savedFocusNode: AccessibilityNodeInfo? = null
 
-    // === РАСПОЗНАВАНИЕ ЖЕСТОВ НА ТАЧПАДЕ ===
     private var touchStartX = 0f
     private var touchStartY = 0f
     private var touchStartTime = 0L
@@ -114,8 +112,7 @@ class MyAccessibilityService : AccessibilityService() {
         val dm = resources.displayMetrics
         val screenHeight = dm.heightPixels
         val tH = SettingsManager.getTrackpadH(this)
-        val bH = SettingsManager.getButtonsH(this)
-        val fixedTopY = (screenHeight - tH - bH - 40).coerceAtLeast(0)
+        val fixedTopY = (screenHeight - tH - 200 - 40).coerceAtLeast(0)
 
         rootParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -154,7 +151,6 @@ class MyAccessibilityService : AccessibilityService() {
         }
         windowManager?.addView(triggerButton, triggerParams)
 
-        // === МЕНЮ РЕДАКТИРОВАНИЯ ===
         createEditMenu()
 
         val filter = IntentFilter(SettingsManager.ACTION_REBUILD)
@@ -167,13 +163,11 @@ class MyAccessibilityService : AccessibilityService() {
         Toast.makeText(this, "✅ Пульт готов!", Toast.LENGTH_SHORT).show()
     }
 
-    // ================= СБОРКА ПАНЕЛИ =================
     private fun buildPanel() {
         val alpha = SettingsManager.getAlpha(this)
         val tW = SettingsManager.getTrackpadW(this)
         val tH = SettingsManager.getTrackpadH(this)
         val bW = SettingsManager.getButtonsW(this)
-        val bH = SettingsManager.getButtonsH(this)
         val isExpanded = SettingsManager.isExpanded(this)
 
         controlPanelRoot = LinearLayout(this).apply {
@@ -282,23 +276,29 @@ class MyAccessibilityService : AccessibilityService() {
         }
         controlPanelRoot?.addView(trackpad)
 
-        // === ПАНЕЛЬ КНОПОК ===
+        // === ПАНЕЛЬ КНОПОК (WRAP_CONTENT ПО ВЫСОТЕ — НЕТ ПУСТОТЫ!) ===
         val buttonPanel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            layoutParams = LinearLayout.LayoutParams(bW, bH).apply {
+            layoutParams = LinearLayout.LayoutParams(bW, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
             }
             visibility = if (isExpanded) View.VISIBLE else View.GONE
         }
 
-        val row1 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val row1 = LinearLayout(this).apply { 
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 150)
+        }
         row1.addView(createBtn("⬅️", Color.argb(255, 60, 60, 60)) { performSwipe(400, 0) })
         row1.addView(createBtn("➡️", Color.argb(255, 60, 60, 60)) { performSwipe(-400, 0) })
         row1.addView(createBtn("➖", Color.argb(255, 60, 60, 60)) { performPinch(false) })
         row1.addView(createBtn("➕", Color.argb(255, 60, 60, 60)) { performPinch(true) })
         buttonPanel.addView(row1)
 
-        val row2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val row2 = LinearLayout(this).apply { 
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 150)
+        }
         row2.addView(createBtn("⬆️", Color.argb(255, 60, 60, 60)) { performSwipe(0, 500) })
         row2.addView(createBtn("⬇️", Color.argb(255, 60, 60, 60)) { performSwipe(0, -500) })
         row2.addView(createBtn("🏠", Color.argb(255, 100, 100, 0)) { teleportCursor(540f, 1200f) })
@@ -311,7 +311,6 @@ class MyAccessibilityService : AccessibilityService() {
         windowManager?.addView(controlPanelRoot, rootParams)
     }
 
-    // ================= МЕНЮ РЕДАКТИРОВАНИЯ =================
     private fun createEditMenu() {
         editMenu = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -339,7 +338,6 @@ class MyAccessibilityService : AccessibilityService() {
         r2.addView(createBtn("Вставить", Color.argb(255, 0, 100, 200), fillHeight = false) {
             performEditAction(AccessibilityNodeInfo.ACTION_PASTE, "Вставить")
         })
-        // "Выделить всё" — через системное меню (ACTION_SELECT_ALL не существует в API)
         r2.addView(createBtn("Выделить всё", Color.argb(255, 100, 100, 0), fillHeight = false) {
             performLongPress(cursorX + 40f, cursorY + 40f)
             hideEditMenu()
@@ -381,7 +379,6 @@ class MyAccessibilityService : AccessibilityService() {
         if (x < 10) x = 10
         if (y < 10) y = 10
 
-        // Обновляем параметры меню через windowManager
         val newParams = editMenu?.layoutParams as? WindowManager.LayoutParams
         if (newParams != null) {
             newParams.x = x
@@ -408,7 +405,6 @@ class MyAccessibilityService : AccessibilityService() {
         hideEditMenu()
     }
 
-    // ================= УПРАВЛЕНИЕ ВИДИМОСТЬЮ =================
     private fun toggleRootVisibility() {
         val isVisible = controlPanelRoot?.visibility == View.VISIBLE
         controlPanelRoot?.visibility = if (isVisible) View.GONE else View.VISIBLE
@@ -421,7 +417,6 @@ class MyAccessibilityService : AccessibilityService() {
         Toast.makeText(this, "🔄 Пульт перестроен!", Toast.LENGTH_SHORT).show()
     }
 
-    // ================= ВСПОМОГАТЕЛЬНЫЕ =================
     private fun createBtn(text: String, bgColor: Int, fillHeight: Boolean = true, onClick: () -> Unit): TextView {
         return TextView(this).apply {
             this.text = text
