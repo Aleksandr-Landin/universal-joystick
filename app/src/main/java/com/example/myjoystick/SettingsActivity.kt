@@ -8,7 +8,6 @@ import androidx.appcompat.app.AppCompatActivity
 class SettingsActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         val scrollView = ScrollView(this)
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -16,8 +15,11 @@ class SettingsActivity : AppCompatActivity() {
         }
         val prefs = getSharedPreferences("joystick_prefs", MODE_PRIVATE)
 
+        // Вспомогательная функция для создания полей
         fun addField(label: String, key: String, defaultVal: Int): EditText {
-            val tv = TextView(this).apply { text = label; textSize = 18f; setPadding(0, 20, 0, 0) }
+            val tv = TextView(this).apply {
+                text = label; textSize = 18f; setPadding(0, 20, 0, 0)
+            }
             val et = EditText(this).apply {
                 hint = "Например, $defaultVal"
                 inputType = android.text.InputType.TYPE_CLASS_NUMBER
@@ -28,13 +30,20 @@ class SettingsActivity : AppCompatActivity() {
             return et
         }
 
-        val etW = addField("Ширина пульта (dp):", "panel_width", 280)
-        val etH = addField("Высота пульта (dp):", "panel_height", 400)
+        val etTW = addField("Ширина тачпада (dp):", "trackpad_w", 250)
+        val etTH = addField("Высота тачпада (dp):", "trackpad_h", 150)
+        val etBW = addField("Ширина панели кнопок (dp):", "buttons_w", 250)
+        val etBH = addField("Высота панели кнопок (dp):", "buttons_h", 150)
 
         val currentAlpha = (SettingsManager.getAlpha(this) * 100).toInt()
-        val tvAlpha = TextView(this).apply { text = "Прозрачность: $currentAlpha%"; textSize = 18f; setPadding(0, 30, 0, 0) }
-        val seekBar = SeekBar(this).apply { max = 100; progress = currentAlpha }
-
+        val tvAlpha = TextView(this).apply {
+            text = "Прозрачность: $currentAlpha%"
+            textSize = 18f
+            setPadding(0, 30, 0, 0)
+        }
+        val seekBar = SeekBar(this).apply {
+            max = 100; progress = currentAlpha
+        }
         seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 tvAlpha.text = "Прозрачность: $progress%"
@@ -42,7 +51,6 @@ class SettingsActivity : AppCompatActivity() {
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
-
         layout.addView(tvAlpha)
         layout.addView(seekBar)
 
@@ -55,14 +63,14 @@ class SettingsActivity : AppCompatActivity() {
         setContentView(scrollView)
 
         btnSave.setOnClickListener {
-            val w = etW.text.toString().toIntOrNull() ?: 280
-            val h = etH.text.toString().toIntOrNull() ?: 400
+            val tw = etTW.text.toString().toIntOrNull() ?: 250
+            val th = etTH.text.toString().toIntOrNull() ?: 150
+            val bw = etBW.text.toString().toIntOrNull() ?: 250
+            val bh = etBH.text.toString().toIntOrNull() ?: 150
             val alpha = seekBar.progress
-
-            SettingsManager.saveSettings(this, w, h, alpha)
+            SettingsManager.saveSettings(this, tw, th, bw, bh, alpha)
             sendBroadcast(Intent(SettingsManager.ACTION_REBUILD))
-
-            Toast.makeText(this, "Настройки применены! 🚀", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Настройки применены! ", Toast.LENGTH_SHORT).show()
             finish()
         }
     }
