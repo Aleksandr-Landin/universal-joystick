@@ -28,6 +28,7 @@ class MyAccessibilityService : AccessibilityService() {
     private var triggerButton: View? = null
     private var controlPanel: LinearLayout? = null
     private var cursorView: View? = null
+    private var expandButton: View? = null  // Кнопка ⚙️ для выдвижения панели
 
     private var cursorX = 540f
     private var cursorY = 1200f
@@ -35,6 +36,7 @@ class MyAccessibilityService : AccessibilityService() {
 
     private lateinit var panelParams: WindowManager.LayoutParams
     private var overlayType = 0
+    private var isPanelExpanded = false
 
     private val rebuildReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -85,10 +87,10 @@ class MyAccessibilityService : AccessibilityService() {
         windowManager?.addView(cursorView, cursorParams)
 
         // === ПАРАМЕТРЫ ПАНЕЛИ ===
-        // Ширина — из настроек. Высота — WRAP_CONTENT (подстроится под содержимое!)
+        isPanelExpanded = SettingsManager.isPanelExpanded(this)
         panelParams = WindowManager.LayoutParams(
             SettingsManager.getWidthPx(this),
-            WindowManager.LayoutParams.WRAP_CONTENT,  // ← ВОЛШЕБСТВО!
+            WindowManager.LayoutParams.WRAP_CONTENT,  // Высота подстраивается под содержимое
             overlayType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
@@ -96,7 +98,7 @@ class MyAccessibilityService : AccessibilityService() {
         ).apply {
             gravity = Gravity.BOTTOM or Gravity.END
             x = 20
-            y = 200
+            y = 20
         }
 
         buildPanel()
@@ -131,12 +133,13 @@ class MyAccessibilityService : AccessibilityService() {
             registerReceiver(rebuildReceiver, filter)
         }
 
-        Toast.makeText(this, "✅ Пульт собран без хвостов!", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "✅ Пульт собран!", Toast.LENGTH_SHORT).show()
     }
 
     private fun buildPanel() {
         val panelAlpha = SettingsManager.getAlpha(this)
-        val trackpadSizePx = SettingsManager.getTrackpadSizePx(this)
+        val trackpadHeightPx = SettingsManager.getTrackpadHeightPx(this)
+        val buttonHeightPx = SettingsManager.getButtonHeightPx(this)
 
         controlPanel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -145,15 +148,13 @@ class MyAccessibilityService : AccessibilityService() {
             alpha = panelAlpha
         }
 
-        // --- ТАЧПАД (РАСТЯНУТ НА ВСЮ ШИРИНУ) ---
-        val trackpad = FrameLayout(this).apply {
+        // --- ТАЧПАД + КНОПКА РАЗВЁРТЫВАНИЯ ---
+        val trackpadContainer = FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,  // ← ширина на всю панель
-                trackpadSizePx                            // ← высота фиксированная
-            ).apply { 
-                bottomMargin = 10 
-            }
-            
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                trackpadHeightPx
+            ).apply { bottomMargin = 10 }
+
             val border = GradientDrawable()
             border.setColor(Color.argb(255, 50, 50, 50))
             border.setStroke(4, Color.argb(255, 100, 100, 100))
@@ -173,6 +174,23 @@ class MyAccessibilityService : AccessibilityService() {
                 isEnabled = false
             }
             addView(hint)
+
+            // Кнопка ⚙️ в правом нижнем углу тачпада
+            expandButton = TextView(this@MyAccessibilityService).apply {
+                text = "⚙️"
+                textSize = 20f
+                gravity = Gravity.CENTER
+                setBackgroundColor(Color.argb(180, 100, 100, 100))
+                setTextColor(Color.WHITE)
+                layoutParams = FrameLayout.LayoutParams(80, 80).apply {
+                    gravity = Gravity.BOTTOM or Gravity.END
+                    setMargins(0, 0, 10, 10)
+                }
+                isClickable = true
+                setOnClickListener { toggleExpand() }
+            }
+            addView(expandButton)
+
             isClickable = true
             isFocusable = true
             isFocusableInTouchMode = true
@@ -182,12 +200,11 @@ class MyAccessibilityService : AccessibilityService() {
         var lastTouchY = 0f
         val sensitivity = 2.0f
 
-        trackpad.setOnTouchListener { v, event ->
+        trackpadContainer.setOnTouchListener { v, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
                     lastTouchX = event.x
                     lastTouchY = event.y
-                    v.setBackgroundColor(Color.argb(255, 80, 80, 80))
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
@@ -205,45 +222,58 @@ class MyAccessibilityService : AccessibilityService() {
                     true
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    v.setBackgroundColor(Color.argb(255, 50, 50, 50))
                     true
                 }
             }
             false
         }
-        controlPanel?.addView(trackpad)
+        controlPanel?.addView(trackpadContainer)
 
-        // --- РЯД 1: Свайпы ---
-        val row1 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        row1.addView(createBtn("⬅️", Color.argb(255, 60, 60, 60)) { performSwipe(400, 0) }, createWeightedParams())
-        row1.addView(createBtn("➡️", Color.argb(255, 60, 60, 60)) { performSwipe(-400, 0) }, createWeightedParams())
-        row1.addView(createBtn("➖", Color.argb(255, 60, 60, 60)) { performPinch(false) }, createWeightedParams())
-        row1.addView(createBtn("➕", Color.argb(255, 60, 60, 60)) { performPinch(true) }, createWeightedParams())
-        controlPanel?.addView(row1)
+        // --- ПАНЕЛЬ КНОПОК (выдвижная) ---
+        if (isPanelExpanded) {
+            val buttonPanel = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                visibility = View.VISIBLE
+            }
 
-        // --- РЯД 2: Скролл + Телепорт + Тап ---
-        val row2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        row2.addView(createBtn("⬆️", Color.argb(255, 60, 60, 60)) { performSwipe(0, 500) }, createWeightedParams())
-        row2.addView(createBtn("⬇️", Color.argb(255, 60, 60, 60)) { performSwipe(0, -500) }, createWeightedParams())
-        row2.addView(createBtn("🏠", Color.argb(255, 100, 100, 0)) { teleportCursor(540f, 1200f) }, createWeightedParams())
-        row2.addView(createBtn("⬆⬆", Color.argb(255, 100, 0, 100)) { teleportCursor(540f, 80f) }, createWeightedParams())
+            // Ряд 1: Свайпы
+            val row1 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            row1.addView(createBtn("⬅️", Color.argb(255, 60, 60, 60), buttonHeightPx) { performSwipe(400, 0) })
+            row1.addView(createBtn("➡️", Color.argb(255, 60, 60, 60), buttonHeightPx) { performSwipe(-400, 0) })
+            row1.addView(createBtn("➖", Color.argb(255, 60, 60, 60), buttonHeightPx) { performPinch(false) })
+            row1.addView(createBtn("➕", Color.argb(255, 60, 60, 60), buttonHeightPx) { performPinch(true) })
+            buttonPanel.addView(row1)
 
-        val mainBtn = createBtn("👆 Тап", Color.argb(255, 0, 100, 200)) {
-            performTap(cursorX + 40f, cursorY + 40f)
+            // Ряд 2: Скролл + Телепорт + Тап
+            val row2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            row2.addView(createBtn("⬆️", Color.argb(255, 60, 60, 60), buttonHeightPx) { performSwipe(0, 500) })
+            row2.addView(createBtn("⬇️", Color.argb(255, 60, 60, 60), buttonHeightPx) { performSwipe(0, -500) })
+            row2.addView(createBtn("🏠", Color.argb(255, 100, 100, 0), buttonHeightPx) { teleportCursor(540f, 1200f) })
+            row2.addView(createBtn("⬆⬆", Color.argb(255, 100, 0, 100), buttonHeightPx) { teleportCursor(540f, 80f) })
+
+            val mainBtn = createBtn("👆 Тап", Color.argb(255, 0, 100, 200), buttonHeightPx) {
+                performTap(cursorX + 40f, cursorY + 40f)
+            }
+            mainBtn.setOnLongClickListener {
+                performLongPress(cursorX + 40f, cursorY + 40f)
+                true
+            }
+            row2.addView(mainBtn)
+            buttonPanel.addView(row2)
+
+            // Кнопка свернуть
+            buttonPanel.addView(createBtn("❌ Свернуть", Color.argb(255, 150, 50, 50), buttonHeightPx) { toggleExpand() })
+
+            controlPanel?.addView(buttonPanel)
         }
-        mainBtn.setOnLongClickListener {
-            performLongPress(cursorX + 40f, cursorY + 40f)
-            true
-        }
-        row2.addView(mainBtn, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 2f).apply {
-            setMargins(10, 0, 0, 0)
-        })
-        controlPanel?.addView(row2)
-
-        // --- СВЕРНУТЬ ---
-        controlPanel?.addView(createBtn("❌", Color.argb(255, 150, 50, 50)) { togglePanel(false) }, createWeightedParams())
 
         windowManager?.addView(controlPanel, panelParams)
+    }
+
+    private fun toggleExpand() {
+        isPanelExpanded = !isPanelExpanded
+        SettingsManager.saveExpandedState(this, isPanelExpanded)
+        rebuildPanel()
     }
 
     private fun rebuildPanel() {
@@ -254,19 +284,11 @@ class MyAccessibilityService : AccessibilityService() {
         }
 
         panelParams.width = SettingsManager.getWidthPx(this)
-        // Высоту не трогаем — она остаётся WRAP_CONTENT
-
         buildPanel()
         Toast.makeText(this, "🔄 Пульт перестроен!", Toast.LENGTH_SHORT).show()
     }
 
-    private fun createWeightedParams(): LinearLayout.LayoutParams {
-        return LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-            setMargins(5, 0, 5, 10)
-        }
-    }
-
-    private fun createBtn(text: String, bgColor: Int, onClick: () -> Unit): TextView {
+    private fun createBtn(text: String, bgColor: Int, heightPx: Int, onClick: () -> Unit): TextView {
         return TextView(this).apply {
             this.text = text
             textSize = 18f
@@ -274,6 +296,9 @@ class MyAccessibilityService : AccessibilityService() {
             setBackgroundColor(bgColor)
             setTextColor(Color.WHITE)
             setPadding(15, 20, 15, 20)
+            layoutParams = LinearLayout.LayoutParams(0, heightPx, 1f).apply {
+                setMargins(5, 5, 5, 5)
+            }
             isClickable = true
             isFocusable = true
             isFocusableInTouchMode = true
