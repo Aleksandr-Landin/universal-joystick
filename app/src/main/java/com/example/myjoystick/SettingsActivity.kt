@@ -15,25 +15,17 @@ class SettingsActivity : AppCompatActivity() {
             setPadding(40, 60, 40, 40)
         }
 
+        val prefs = getSharedPreferences("joystick_prefs", MODE_PRIVATE)
+
         // 1. Ширина пульта
         val tvWidth = TextView(this).apply { text = "Ширина пульта (в dp):"; textSize = 18f }
         val etWidth = EditText(this).apply {
             hint = "Например, 250"
             inputType = android.text.InputType.TYPE_CLASS_NUMBER
-            setText(SettingsManager.getWidthPx(this@SettingsActivity).toString()) // Показываем в dp для удобства
-            // Небольшой хак: переводим пиксели обратно в dp для отображения, но для простоты оставим как есть или используем вспомогательную функцию. 
-            // Чтобы не усложнять, просто покажем дефолт, если пусто, но лучше читать из менеджера.
-            // Упростим: прочитаем dp напрямую, добавив метод в менеджер, но пока оставим так, это не критично.
+            setText(prefs.getInt("panel_width", 250).toString())
         }
-        // Исправление для корректного отображения dp в поле:
-        val widthDp = android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_DIP, 1f, resources.displayMetrics).let { 1 } // заглушка, ниже правильный способ
-        // Правильный способ получить dp из настроек (добавим в менеджер, но пока просто парсим)
-        // Для простоты оставим поля пустыми при первом запуске, но подтянем сохраненные.
-        
-        // Перезапишем логику полей, чтобы было чисто:
-        val prefs = getSharedPreferences("joystick_prefs", MODE_PRIVATE)
-        etWidth.setText(prefs.getInt("panel_width", 250).toString())
-        
+
+        // 2. Размер тачпада
         val tvTrackpad = TextView(this).apply { text = "Размер тачпада (сторона квадрата, в dp):"; textSize = 18f; setPadding(0, 30, 0, 0) }
         val etTrackpad = EditText(this).apply {
             hint = "Например, 150"
@@ -41,6 +33,7 @@ class SettingsActivity : AppCompatActivity() {
             setText(prefs.getInt("trackpad_size", 150).toString())
         }
 
+        // 3. Прозрачность
         val currentAlpha = (SettingsManager.getAlpha(this@SettingsActivity) * 100).toInt()
         val tvAlpha = TextView(this).apply { text = "Прозрачность: $currentAlpha%"; textSize = 18f; setPadding(0, 30, 0, 0) }
         val seekBar = SeekBar(this).apply { max = 100; progress = currentAlpha }
@@ -53,6 +46,7 @@ class SettingsActivity : AppCompatActivity() {
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
 
+        // 4. Кнопка Сохранить
         val btnSave = Button(this).apply {
             text = "Сохранить и применить"
             setPadding(0, 50, 0, 0)
