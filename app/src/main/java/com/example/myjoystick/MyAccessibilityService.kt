@@ -85,10 +85,10 @@ class MyAccessibilityService : AccessibilityService() {
         windowManager?.addView(cursorView, cursorParams)
 
         // === ПАРАМЕТРЫ ПАНЕЛИ ===
-        // Ширина — из настроек. Высота — WRAP_CONTENT (подстроится под кнопки и тачпад!)
+        // Ширина — из настроек. Высота — WRAP_CONTENT (подстроится под содержимое!)
         panelParams = WindowManager.LayoutParams(
             SettingsManager.getWidthPx(this),
-            WindowManager.LayoutParams.WRAP_CONTENT, 
+            WindowManager.LayoutParams.WRAP_CONTENT,  // ← ВОЛШЕБСТВО!
             overlayType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
@@ -145,14 +145,13 @@ class MyAccessibilityService : AccessibilityService() {
             alpha = panelAlpha
         }
 
-        // --- ТАЧПАД (ИДЕАЛЬНЫЙ КВАДРАТ) ---
+        // --- ТАЧПАД (РАСТЯНУТ НА ВСЮ ШИРИНУ) ---
         val trackpad = FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(
-                trackpadSizePx,  // Ширина = стороне квадрата
-                trackpadSizePx   // Высота = стороне квадрата
+                LinearLayout.LayoutParams.MATCH_PARENT,  // ← ширина на всю панель
+                trackpadSizePx                            // ← высота фиксированная
             ).apply { 
                 bottomMargin = 10 
-                gravity = Gravity.CENTER_HORIZONTAL // Центрируем квадрат по ширине панели
             }
             
             val border = GradientDrawable()
@@ -161,7 +160,7 @@ class MyAccessibilityService : AccessibilityService() {
             background = border
 
             val hint = TextView(this@MyAccessibilityService).apply {
-                text = "ВОДИ ЗДЕСЬ\nдля курсора"
+                text = "ВОДИ ЗДЕСЬ для курсора"
                 gravity = Gravity.CENTER
                 setTextColor(Color.argb(150, 255, 255, 255))
                 textSize = 14f
@@ -255,7 +254,7 @@ class MyAccessibilityService : AccessibilityService() {
         }
 
         panelParams.width = SettingsManager.getWidthPx(this)
-        // Высоту не трогаем, она остается WRAP_CONTENT
+        // Высоту не трогаем — она остаётся WRAP_CONTENT
 
         buildPanel()
         Toast.makeText(this, "🔄 Пульт перестроен!", Toast.LENGTH_SHORT).show()
