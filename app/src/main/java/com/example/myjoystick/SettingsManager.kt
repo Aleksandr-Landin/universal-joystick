@@ -5,7 +5,7 @@ import android.content.Context
 object SettingsManager {
     private const val PREFS_NAME = "joystick_prefs"
     private const val KEY_WIDTH = "panel_width"
-    private const val KEY_TRACKPAD = "trackpad_size" // Новая переменная для квадрата тачпада
+    private const val KEY_TRACKPAD = "trackpad_size"
     private const val KEY_ALPHA = "panel_alpha"
 
     private const val DEFAULT_WIDTH_DP = 250
