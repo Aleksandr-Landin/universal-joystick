@@ -12,27 +12,63 @@ import android.graphics.Path
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 
 class MyAccessibilityService : AccessibilityService() {
+
     private var windowManager: WindowManager? = null
     private var controlPanelRoot: LinearLayout? = null
     private var cursorView: View? = null
     private var triggerButton: View? = null
+    private var expandButton: View? = null
+
+    // === МЕНЮ РЕДАКТИРОВАНИЯ (оверлей) ===
+    private var editMenu: LinearLayout? = null
+    private lateinit var editMenuParams: WindowManager.LayoutParams
+    private var savedFocusNode: AccessibilityNodeInfo? = null
 
     private var cursorX = 540f
     private var cursorY = 1200f
     private lateinit var cursorParams: WindowManager.LayoutParams
     private lateinit var rootParams: WindowManager.LayoutParams
     private var overlayType = 0
+
+    // === РАСПОЗНАВАНИЕ ЖЕСТОВ НА ТАЧПАДЕ ===
+    private var touchStartX = 0f
+    private var touchStartY = 0f
+    private var touchStartTime = 0L
+    private var lastTouchX = 0f
+    private var lastTouchY = 0f
+    private var isDragging = false
+    private var longPressFired = false
+    private val sensitivity = 2.0f
+    private val longPressHandler = Handler(Looper.getMainLooper())
+    private val longPressRunnable = Runnable {
+        if (!isDragging) {
+            longPressFired = true
+            val node = rootInActiveWindow?.findFocus()
+            savedFocusNode = node
+            if (node != null && node.isEditable) {
+                showEditMenu()
+                Toast.makeText(this, "📝 Меню редактирования", Toast.LENGTH_SHORT).show()
+            } else {
+                // Запасной ход: системный долгий тап в позиции курсора
+                performLongPress(cursorX + 40f, cursorY + 40f)
+                Toast.makeText(this, "⚠️ Нет поля ввода — пробую системное меню", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     private val rebuildReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -56,7 +92,7 @@ class MyAccessibilityService : AccessibilityService() {
             WindowManager.LayoutParams.TYPE_PHONE
         }
 
-        // 1. КУРСОР
+        // === КУРСОР ===
         cursorParams = WindowManager.LayoutParams(
             80, 80, overlayType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
@@ -77,17 +113,12 @@ class MyAccessibilityService : AccessibilityService() {
         }
         windowManager?.addView(cursorView, cursorParams)
 
-        // 2. РАСЧЁТ ФИКСИРОВАННОЙ ПОЗИЦИИ ДЛЯ ТАЧПАДА
-        val displayMetrics = resources.displayMetrics
-        val screenHeight = displayMetrics.heightPixels
-        
+        // === ФИКСИРОВАННАЯ ПОЗИЦИЯ ПАНЕЛИ (тачпад не падает при сворачивании) ===
+        val dm = resources.displayMetrics
+        val screenHeight = dm.heightPixels
         val tH = SettingsManager.getTrackpadH(this)
         val bH = SettingsManager.getButtonsH(this)
-        val bottomMarginPx = 40 // Отступ от самого низа экрана
-
-        // Вычисляем Y так, чтобы даже в развёрнутом виде панель была у нижнего края.
-        // При сворачивании этот Y не изменится, поэтому тачпад останется на месте!
-        val fixedTopY = screenHeight - tH - bH - bottomMarginPx
+        val fixedTopY = (screenHeight - tH - bH - 40).coerceAtLeast(0)
 
         rootParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -97,14 +128,14 @@ class MyAccessibilityService : AccessibilityService() {
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.TOP or Gravity.END // <-- ПРИВЯЗКА К ВЕРХНЕМУ КРАЮ
+            gravity = Gravity.TOP or Gravity.END
             x = 20
-            y = fixedTopY // <-- ФИКСИРОВАННАЯ КООРДИНАТА
+            y = fixedTopY
         }
 
         buildPanel()
 
-        // 3. КНОПКА-ТРИГГЕР (показать/скрыть весь пульт)
+        // === ТРИГГЕР (иконка 🕹️) ===
         triggerButton = TextView(this).apply {
             text = "🕹️"
             textSize = 28f
@@ -126,20 +157,20 @@ class MyAccessibilityService : AccessibilityService() {
         }
         windowManager?.addView(triggerButton, triggerParams)
 
+        // === МЕНЮ РЕДАКТИРОВАНИЯ (создаём один раз, прячем) ===
+        createEditMenu()
+
         val filter = IntentFilter(SettingsManager.ACTION_REBUILD)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(rebuildReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
         } else {
             registerReceiver(rebuildReceiver, filter)
         }
+
+        Toast.makeText(this, "✅ Пульт готов: тап/драг/долгий — на тачпаде", Toast.LENGTH_LONG).show()
     }
 
-    private fun toggleRootVisibility() {
-        val isVisible = controlPanelRoot?.visibility == View.VISIBLE
-        controlPanelRoot?.visibility = if (isVisible) View.GONE else View.VISIBLE
-        triggerButton?.visibility = if (isVisible) View.VISIBLE else View.GONE
-    }
-
+    // ================= СБОРКА ПАНЕЛИ =================
     private fun buildPanel() {
         val alpha = SettingsManager.getAlpha(this)
         val tW = SettingsManager.getTrackpadW(this)
@@ -156,7 +187,7 @@ class MyAccessibilityService : AccessibilityService() {
             visibility = View.VISIBLE
         }
 
-        // === ТАЧПАД (ВСЕГДА ВИДЕН) ===
+        // === ТАЧПАД (многофункциональный) ===
         val trackpad = FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(tW, tH).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
@@ -169,10 +200,10 @@ class MyAccessibilityService : AccessibilityService() {
             background = border
 
             val hint = TextView(this@MyAccessibilityService).apply {
-                text = "ВОДИ ЗДЕСЬ\nдля курсора"
+                text = "ВОДИ = курсор\nТАП = выбор\nДЕРЖИ = меню"
                 gravity = Gravity.CENTER
                 setTextColor(Color.argb(150, 255, 255, 255))
-                textSize = 14f
+                textSize = 13f
                 layoutParams = FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT,
                     FrameLayout.LayoutParams.MATCH_PARENT
@@ -181,8 +212,8 @@ class MyAccessibilityService : AccessibilityService() {
             }
             addView(hint)
 
-            // Кнопка сворачивания/разворачивания панели кнопок
-            val toggleBtn = TextView(this@MyAccessibilityService).apply {
+            // Кнопка свернуть/развернуть панель кнопок
+            expandButton = TextView(this@MyAccessibilityService).apply {
                 text = if (isExpanded) "🔼" else "🔽"
                 textSize = 20f
                 gravity = Gravity.CENTER
@@ -198,33 +229,67 @@ class MyAccessibilityService : AccessibilityService() {
                     rebuildPanel()
                 }
             }
-            addView(toggleBtn)
+            addView(expandButton)
+
             isClickable = true; isFocusable = true; isFocusableInTouchMode = true
         }
 
-        var lastTouchX = 0f; var lastTouchY = 0f
-        val sensitivity = 2.0f
-
-        trackpad.setOnTouchListener { v, event ->
+        trackpad.setOnTouchListener { _, event ->
             when (event.action) {
-                MotionEvent.ACTION_DOWN -> { lastTouchX = event.x; lastTouchY = event.y; true }
-                MotionEvent.ACTION_MOVE -> {
-                    cursorX += (event.x - lastTouchX) * sensitivity
-                    cursorY += (event.y - lastTouchY) * sensitivity
-                    cursorX = cursorX.coerceIn(0f, 1080f)
-                    cursorY = cursorY.coerceIn(0f, 3000f)
-                    cursorParams.x = cursorX.toInt(); cursorParams.y = cursorY.toInt()
-                    windowManager?.updateViewLayout(cursorView, cursorParams)
-                    lastTouchX = event.x; lastTouchY = event.y
+                MotionEvent.ACTION_DOWN -> {
+                    touchStartX = event.x
+                    touchStartY = event.y
+                    lastTouchX = event.x
+                    lastTouchY = event.y
+                    touchStartTime = System.currentTimeMillis()
+                    isDragging = false
+                    longPressFired = false
+                    longPressHandler.postDelayed(longPressRunnable, 500L)
                     true
                 }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> true
+                MotionEvent.ACTION_MOVE -> {
+                    // Порог: сдвинули больше 25px — это драг, отменяем долгий тап
+                    if (!isDragging) {
+                        val dist = Math.hypot((event.x - touchStartX).toDouble(), (event.y - touchStartY).toDouble())
+                        if (dist > 25.0) {
+                            isDragging = true
+                            longPressHandler.removeCallbacks(longPressRunnable)
+                        }
+                    }
+                    if (isDragging) {
+                        val dx = event.x - lastTouchX
+                        val dy = event.y - lastTouchY
+                        cursorX += dx * sensitivity
+                        cursorY += dy * sensitivity
+                        cursorX = cursorX.coerceIn(0f, 1080f)
+                        cursorY = cursorY.coerceIn(0f, 3000f)
+                        cursorParams.x = cursorX.toInt()
+                        cursorParams.y = cursorY.toInt()
+                        windowManager?.updateViewLayout(cursorView, cursorParams)
+                    }
+                    lastTouchX = event.x
+                    lastTouchY = event.y
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    longPressHandler.removeCallbacks(longPressRunnable)
+                    val duration = System.currentTimeMillis() - touchStartTime
+                    if (!isDragging && !longPressFired && duration < 300L) {
+                        // Это одиночный тап → клик в позиции курсора
+                        performTap(cursorX + 40f, cursorY + 40f)
+                    }
+                    true
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    longPressHandler.removeCallbacks(longPressRunnable)
+                    true
+                }
                 else -> false
             }
         }
         controlPanelRoot?.addView(trackpad)
 
-        // === ПАНЕЛЬ КНОПОК (СВОРАЧИВАЕМАЯ) ===
+        // === ПАНЕЛЬ КНОПОК (без Тапа — он теперь на тачпаде) ===
         val buttonPanel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(bW, bH).apply {
@@ -233,30 +298,115 @@ class MyAccessibilityService : AccessibilityService() {
             visibility = if (isExpanded) View.VISIBLE else View.GONE
         }
 
-        // Ряд 1 (занимает 50% высоты панели кнопок)
-        val row1 = LinearLayout(this).apply { 
-            orientation = LinearLayout.HORIZONTAL
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
-        }
+        val row1 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         row1.addView(createBtn("⬅️", Color.argb(255, 60, 60, 60)) { performSwipe(400, 0) })
         row1.addView(createBtn("➡️", Color.argb(255, 60, 60, 60)) { performSwipe(-400, 0) })
         row1.addView(createBtn("➖", Color.argb(255, 60, 60, 60)) { performPinch(false) })
         row1.addView(createBtn("➕", Color.argb(255, 60, 60, 60)) { performPinch(true) })
         buttonPanel.addView(row1)
 
-        // Ряд 2 (занимает 50% высоты панели кнопок)
-        val row2 = LinearLayout(this).apply { 
-            orientation = LinearLayout.HORIZONTAL
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
-        }
+        val row2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         row2.addView(createBtn("⬆️", Color.argb(255, 60, 60, 60)) { performSwipe(0, 500) })
         row2.addView(createBtn("⬇️", Color.argb(255, 60, 60, 60)) { performSwipe(0, -500) })
         row2.addView(createBtn("🏠", Color.argb(255, 100, 100, 0)) { teleportCursor(540f, 1200f) })
-        row2.addView(createBtn("👆 Тап", Color.argb(255, 0, 100, 200)) { performTap(cursorX + 40f, cursorY + 40f) })
+        row2.addView(createBtn("⬆⬆", Color.argb(255, 100, 0, 100)) { teleportCursor(540f, 80f) })
         buttonPanel.addView(row2)
 
         controlPanelRoot?.addView(buttonPanel)
+
+        // Кнопка полностью спрятать пульт (в иконку 🕹️)
+        controlPanelRoot?.addView(createBtn("❌ Скрыть", Color.argb(255, 150, 50, 50)) { toggleRootVisibility() })
+
         windowManager?.addView(controlPanelRoot, rootParams)
+    }
+
+    // ================= МЕНЮ РЕДАКТИРОВАНИЯ =================
+    private fun createEditMenu() {
+        editMenu = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.argb(240, 30, 30, 30))
+            setPadding(20, 20, 20, 20)
+        }
+
+        val closeRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.END
+        }
+        closeRow.addView(createBtn("✕", Color.argb(255, 150, 50, 50), fillHeight = false) { hideEditMenu() })
+        editMenu?.addView(closeRow)
+
+        val r1 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        r1.addView(createBtn("Копировать", Color.argb(255, 60, 60, 120), fillHeight = false) {
+            performEditAction(AccessibilityNodeInfo.ACTION_COPY, "Копировать")
+        })
+        r1.addView(createBtn("Вырезать", Color.argb(255, 120, 60, 60), fillHeight = false) {
+            performEditAction(AccessibilityNodeInfo.ACTION_CUT, "Вырезать")
+        })
+        editMenu?.addView(r1)
+
+        val r2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        r2.addView(createBtn("Вставить", Color.argb(255, 0, 100, 200), fillHeight = false) {
+            performEditAction(AccessibilityNodeInfo.ACTION_PASTE, "Вставить")
+        })
+        r2.addView(createBtn("Выделить всё", Color.argb(255, 100, 100, 0), fillHeight = false) {
+            performEditAction(AccessibilityNodeInfo.ACTION_SELECT_ALL, "Выделить всё")
+        })
+        editMenu?.addView(r2)
+
+        editMenuParams = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            overlayType,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = 0
+            y = 0
+        }
+        editMenu?.visibility = View.GONE
+        windowManager?.addView(editMenu, editMenuParams)
+    }
+
+    private fun showEditMenu() {
+        val dm = resources.displayMetrics
+        val menuW = 520
+        val menuH = 360
+        var x = cursorX.toInt() + 80
+        var y = cursorY.toInt() + 80
+        if (x + menuW > dm.widthPixels) x = dm.widthPixels - menuW - 10
+        if (y + menuH > dm.heightPixels) y = dm.heightPixels - menuH - 10
+        if (x < 10) x = 10
+        if (y < 10) y = 10
+        editMenuParams.x = x
+        editMenuParams.y = y
+        editMenu?.visibility = View.VISIBLE
+        windowManager?.updateViewLayout(editMenu, editMenuParams)
+    }
+
+    private fun hideEditMenu() {
+        editMenu?.visibility = View.GONE
+        savedFocusNode = null
+    }
+
+    private fun performEditAction(action: Int, label: String) {
+        val node = savedFocusNode
+        if (node != null && node.isEditable) {
+            val ok = node.performAction(action)
+            Toast.makeText(this, if (ok) "✅ $label" else "❌ $label не сработало", Toast.LENGTH_SHORT).show()
+        } else {
+            performLongPress(cursorX + 40f, cursorY + 40f)
+            Toast.makeText(this, "⚠️ Поле потеряно — пробую системное меню", Toast.LENGTH_SHORT).show()
+        }
+        hideEditMenu()
+    }
+
+    // ================= УПРАВЛЕНИЕ ВИДИМОСТЬЮ =================
+    private fun toggleRootVisibility() {
+        val isVisible = controlPanelRoot?.visibility == View.VISIBLE
+        controlPanelRoot?.visibility = if (isVisible) View.GONE else View.VISIBLE
+        triggerButton?.visibility = if (isVisible) View.VISIBLE else View.GONE
     }
 
     private fun rebuildPanel() {
@@ -265,16 +415,23 @@ class MyAccessibilityService : AccessibilityService() {
         Toast.makeText(this, "🔄 Пульт перестроен!", Toast.LENGTH_SHORT).show()
     }
 
-    private fun createBtn(text: String, bgColor: Int, onClick: () -> Unit): TextView {
+    // ================= ВСПОМОГАТЕЛЬНЫЕ =================
+    private fun createBtn(text: String, bgColor: Int, fillHeight: Boolean = true, onClick: () -> Unit): TextView {
         return TextView(this).apply {
             this.text = text
-            textSize = 18f
+            textSize = if (fillHeight) 18f else 16f
             gravity = Gravity.CENTER
             setBackgroundColor(bgColor)
             setTextColor(Color.WHITE)
-            setPadding(10, 10, 10, 10)
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f).apply {
-                setMargins(5, 5, 5, 5)
+            setPadding(15, 20, 15, 20)
+            layoutParams = if (fillHeight) {
+                LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f).apply {
+                    setMargins(5, 5, 5, 5)
+                }
+            } else {
+                LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    setMargins(8, 8, 8, 8)
+                }
             }
             isClickable = true; isFocusable = true; isFocusableInTouchMode = true
             setOnTouchListener { v, event ->
@@ -285,6 +442,7 @@ class MyAccessibilityService : AccessibilityService() {
                     else -> false
                 }
             }
+            setOnClickListener { onClick() }
         }
     }
 
@@ -292,12 +450,21 @@ class MyAccessibilityService : AccessibilityService() {
         cursorX = x; cursorY = y
         cursorParams.x = x.toInt(); cursorParams.y = y.toInt()
         windowManager?.updateViewLayout(cursorView, cursorParams)
+        Toast.makeText(this, "📍 Курсор перемещён!", Toast.LENGTH_SHORT).show()
     }
 
     private fun performTap(x: Float, y: Float) {
         val path = Path().apply { moveTo(x, y) }
         dispatchGesture(GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 100)).build(), object : GestureResultCallback() {
             override fun onCompleted(gesture: GestureDescription?) { Toast.makeText(this@MyAccessibilityService, "✅ Тап!", Toast.LENGTH_SHORT).show() }
+            override fun onCancelled(gesture: GestureDescription?) {}
+        }, null)
+    }
+
+    private fun performLongPress(x: Float, y: Float) {
+        val path = Path().apply { moveTo(x, y) }
+        dispatchGesture(GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 1000)).build(), object : GestureResultCallback() {
+            override fun onCompleted(gesture: GestureDescription?) { Toast.makeText(this@MyAccessibilityService, "✅ Системное меню!", Toast.LENGTH_SHORT).show() }
             override fun onCancelled(gesture: GestureDescription?) {}
         }, null)
     }
@@ -313,7 +480,7 @@ class MyAccessibilityService : AccessibilityService() {
     private fun performPinch(zoomIn: Boolean) {
         val cx = cursorX + 40f; val cy = cursorY + 40f
         val p1 = Path(); val p2 = Path()
-        if (zoomIn) { p1.moveTo(cx - 50, cy); p1.lineTo(cx - 250, cy); p2.moveTo(cx + 50, cy); p2.lineTo(cx + 250, cy) } 
+        if (zoomIn) { p1.moveTo(cx - 50, cy); p1.lineTo(cx - 250, cy); p2.moveTo(cx + 50, cy); p2.lineTo(cx + 250, cy) }
         else { p1.moveTo(cx - 250, cy); p1.lineTo(cx - 50, cy); p2.moveTo(cx + 250, cy); p2.lineTo(cx + 50, cy) }
         dispatchGesture(GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(p1, 0, 300)).addStroke(GestureDescription.StrokeDescription(p2, 0, 300)).build(), object : GestureResultCallback() {
             override fun onCompleted(gesture: GestureDescription?) { Toast.makeText(this@MyAccessibilityService, if (zoomIn) "🔍 Увеличено!" else "🔎 Уменьшено!", Toast.LENGTH_SHORT).show() }
@@ -322,14 +489,18 @@ class MyAccessibilityService : AccessibilityService() {
     }
 
     override fun onInterrupt() {}
+
     override fun onDestroy() {
         super.onDestroy()
+        longPressHandler.removeCallbacksAndMessages(null)
         try { unregisterReceiver(rebuildReceiver) } catch (e: Exception) {}
         try {
             windowManager?.removeView(triggerButton)
             windowManager?.removeView(controlPanelRoot)
             windowManager?.removeView(cursorView)
+            windowManager?.removeView(editMenu)
         } catch (e: Exception) {}
     }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
 }
