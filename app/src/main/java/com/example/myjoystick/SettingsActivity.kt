@@ -8,7 +8,6 @@ import androidx.appcompat.app.AppCompatActivity
 class SettingsActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         val scrollView = ScrollView(this)
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -17,70 +16,64 @@ class SettingsActivity : AppCompatActivity() {
 
         val prefs = getSharedPreferences("joystick_prefs", MODE_PRIVATE)
 
-        // 1. Ширина пульта
-        val tvWidth = TextView(this).apply { text = "Ширина пульта (в dp):"; textSize = 18f }
-        val etWidth = EditText(this).apply {
+        // 1. Ширина тачпада
+        val tvTrackpadWidth = TextView(this).apply { text = "Ширина тачпада (в dp):"; textSize = 18f }
+        val etTrackpadWidth = EditText(this).apply {
             hint = "Например, 250"
             inputType = android.text.InputType.TYPE_CLASS_NUMBER
-            setText(prefs.getInt("panel_width", 250).toString())
+            setText(prefs.getInt("trackpad_width", 250).toString())
         }
 
         // 2. Высота тачпада
-        val tvTrackpad = TextView(this).apply { text = "Высота тачпада (в dp):"; textSize = 18f; setPadding(0, 30, 0, 0) }
-        val etTrackpad = EditText(this).apply {
+        val tvTrackpadHeight = TextView(this).apply { text = "Высота тачпада (в dp):"; textSize = 18f; setPadding(0, 30, 0, 0) }
+        val etTrackpadHeight = EditText(this).apply {
             hint = "Например, 150"
             inputType = android.text.InputType.TYPE_CLASS_NUMBER
             setText(prefs.getInt("trackpad_height", 150).toString())
         }
 
-        // 3. Высота кнопки
-        val tvButton = TextView(this).apply { text = "Высота одной кнопки (в dp):"; textSize = 18f; setPadding(0, 30, 0, 0) }
-        val etButton = EditText(this).apply {
-            hint = "Например, 50"
+        // 3. Ширина панели с кнопками
+        val tvButtonPanelWidth = TextView(this).apply { text = "Ширина панели с кнопками (в dp):"; textSize = 18f; setPadding(0, 30, 0, 0) }
+        val etButtonPanelWidth = EditText(this).apply {
+            hint = "Например, 250"
             inputType = android.text.InputType.TYPE_CLASS_NUMBER
-            setText(prefs.getInt("button_height", 50).toString())
+            setText(prefs.getInt("button_panel_width", 250).toString())
         }
 
-        // 4. Прозрачность
-        val currentAlpha = (SettingsManager.getAlpha(this@SettingsActivity) * 100).toInt()
-        val tvAlpha = TextView(this).apply { text = "Прозрачность: $currentAlpha%"; textSize = 18f; setPadding(0, 30, 0, 0) }
-        val seekBar = SeekBar(this).apply { max = 100; progress = currentAlpha }
+        // 4. Высота панели с кнопками
+        val tvButtonPanelHeight = TextView(this).apply { text = "Высота панели с кнопками (в dp):"; textSize = 18f; setPadding(0, 30, 0, 0) }
+        val etButtonPanelHeight = EditText(this).apply {
+            hint = "Например, 200"
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            setText(prefs.getInt("button_panel_height", 200).toString())
+        }
 
-        seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                tvAlpha.text = "Прозрачность: $progress%"
-            }
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
-        })
-
-        // 5. Кнопка Сохранить
         val btnSave = Button(this).apply {
             text = "Сохранить и применить"
             setPadding(0, 50, 0, 0)
         }
 
-        layout.addView(tvWidth)
-        layout.addView(etWidth)
-        layout.addView(tvTrackpad)
-        layout.addView(etTrackpad)
-        layout.addView(tvButton)
-        layout.addView(etButton)
-        layout.addView(tvAlpha)
-        layout.addView(seekBar)
+        layout.addView(tvTrackpadWidth)
+        layout.addView(etTrackpadWidth)
+        layout.addView(tvTrackpadHeight)
+        layout.addView(etTrackpadHeight)
+        layout.addView(tvButtonPanelWidth)
+        layout.addView(etButtonPanelWidth)
+        layout.addView(tvButtonPanelHeight)
+        layout.addView(etButtonPanelHeight)
         layout.addView(btnSave)
+
         scrollView.addView(layout)
         setContentView(scrollView)
 
         btnSave.setOnClickListener {
-            val width = etWidth.text.toString().toIntOrNull() ?: 250
-            val trackpad = etTrackpad.text.toString().toIntOrNull() ?: 150
-            val button = etButton.text.toString().toIntOrNull() ?: 50
-            val alpha = seekBar.progress
+            val trackpadWidth = etTrackpadWidth.text.toString().toIntOrNull() ?: 250
+            val trackpadHeight = etTrackpadHeight.text.toString().toIntOrNull() ?: 150
+            val buttonPanelWidth = etButtonPanelWidth.text.toString().toIntOrNull() ?: 250
+            val buttonPanelHeight = etButtonPanelHeight.text.toString().toIntOrNull() ?: 200
 
-            SettingsManager.saveSettings(this, width, trackpad, button, alpha)
+            SettingsManager.saveSettings(this, trackpadWidth, trackpadHeight, buttonPanelWidth, buttonPanelHeight)
             sendBroadcast(Intent(SettingsManager.ACTION_REBUILD))
-
             Toast.makeText(this, "Настройки применены! 🚀", Toast.LENGTH_SHORT).show()
             finish()
         }
