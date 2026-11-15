@@ -31,18 +31,16 @@ class MyAccessibilityService : AccessibilityService() {
     private var controlPanelRoot: LinearLayout? = null
     private var cursorView: View? = null
     private var triggerButton: View? = null
-    private var expandButton: View? = null
-
-    // === МЕНЮ РЕДАКТИРОВАНИЯ (оверлей) ===
-    private var editMenu: LinearLayout? = null
-    private lateinit var editMenuParams: WindowManager.LayoutParams
-    private var savedFocusNode: AccessibilityNodeInfo? = null
 
     private var cursorX = 540f
     private var cursorY = 1200f
     private lateinit var cursorParams: WindowManager.LayoutParams
     private lateinit var rootParams: WindowManager.LayoutParams
     private var overlayType = 0
+
+    // === МЕНЮ РЕДАКТИРОВАНИЯ ===
+    private var editMenu: LinearLayout? = null
+    private var savedFocusNode: AccessibilityNodeInfo? = null
 
     // === РАСПОЗНАВАНИЕ ЖЕСТОВ НА ТАЧПАДЕ ===
     private var touchStartX = 0f
@@ -57,15 +55,14 @@ class MyAccessibilityService : AccessibilityService() {
     private val longPressRunnable = Runnable {
         if (!isDragging) {
             longPressFired = true
-            val node = rootInActiveWindow?.findFocus()
+            val node = rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
             savedFocusNode = node
             if (node != null && node.isEditable) {
                 showEditMenu()
                 Toast.makeText(this, "📝 Меню редактирования", Toast.LENGTH_SHORT).show()
             } else {
-                // Запасной ход: системный долгий тап в позиции курсора
                 performLongPress(cursorX + 40f, cursorY + 40f)
-                Toast.makeText(this, "⚠️ Нет поля ввода — пробую системное меню", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "⚠️ Нет поля ввода — открываю системное меню", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -113,7 +110,7 @@ class MyAccessibilityService : AccessibilityService() {
         }
         windowManager?.addView(cursorView, cursorParams)
 
-        // === ФИКСИРОВАННАЯ ПОЗИЦИЯ ПАНЕЛИ (тачпад не падает при сворачивании) ===
+        // === ФИКСИРОВАННАЯ ПОЗИЦИЯ ПАНЕЛИ ===
         val dm = resources.displayMetrics
         val screenHeight = dm.heightPixels
         val tH = SettingsManager.getTrackpadH(this)
@@ -135,7 +132,7 @@ class MyAccessibilityService : AccessibilityService() {
 
         buildPanel()
 
-        // === ТРИГГЕР (иконка 🕹️) ===
+        // === ТРИГГЕР ===
         triggerButton = TextView(this).apply {
             text = "🕹️"
             textSize = 28f
@@ -157,7 +154,7 @@ class MyAccessibilityService : AccessibilityService() {
         }
         windowManager?.addView(triggerButton, triggerParams)
 
-        // === МЕНЮ РЕДАКТИРОВАНИЯ (создаём один раз, прячем) ===
+        // === МЕНЮ РЕДАКТИРОВАНИЯ ===
         createEditMenu()
 
         val filter = IntentFilter(SettingsManager.ACTION_REBUILD)
@@ -167,7 +164,7 @@ class MyAccessibilityService : AccessibilityService() {
             registerReceiver(rebuildReceiver, filter)
         }
 
-        Toast.makeText(this, "✅ Пульт готов: тап/драг/долгий — на тачпаде", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, "✅ Пульт готов!", Toast.LENGTH_SHORT).show()
     }
 
     // ================= СБОРКА ПАНЕЛИ =================
@@ -187,7 +184,7 @@ class MyAccessibilityService : AccessibilityService() {
             visibility = View.VISIBLE
         }
 
-        // === ТАЧПАД (многофункциональный) ===
+        // === ТАЧПАД ===
         val trackpad = FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(tW, tH).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
@@ -212,8 +209,7 @@ class MyAccessibilityService : AccessibilityService() {
             }
             addView(hint)
 
-            // Кнопка свернуть/развернуть панель кнопок
-            expandButton = TextView(this@MyAccessibilityService).apply {
+            val toggleBtn = TextView(this@MyAccessibilityService).apply {
                 text = if (isExpanded) "🔼" else "🔽"
                 textSize = 20f
                 gravity = Gravity.CENTER
@@ -229,8 +225,7 @@ class MyAccessibilityService : AccessibilityService() {
                     rebuildPanel()
                 }
             }
-            addView(expandButton)
-
+            addView(toggleBtn)
             isClickable = true; isFocusable = true; isFocusableInTouchMode = true
         }
 
@@ -248,7 +243,6 @@ class MyAccessibilityService : AccessibilityService() {
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    // Порог: сдвинули больше 25px — это драг, отменяем долгий тап
                     if (!isDragging) {
                         val dist = Math.hypot((event.x - touchStartX).toDouble(), (event.y - touchStartY).toDouble())
                         if (dist > 25.0) {
@@ -275,7 +269,6 @@ class MyAccessibilityService : AccessibilityService() {
                     longPressHandler.removeCallbacks(longPressRunnable)
                     val duration = System.currentTimeMillis() - touchStartTime
                     if (!isDragging && !longPressFired && duration < 300L) {
-                        // Это одиночный тап → клик в позиции курсора
                         performTap(cursorX + 40f, cursorY + 40f)
                     }
                     true
@@ -289,7 +282,7 @@ class MyAccessibilityService : AccessibilityService() {
         }
         controlPanelRoot?.addView(trackpad)
 
-        // === ПАНЕЛЬ КНОПОК (без Тапа — он теперь на тачпаде) ===
+        // === ПАНЕЛЬ КНОПОК ===
         val buttonPanel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(bW, bH).apply {
@@ -313,8 +306,6 @@ class MyAccessibilityService : AccessibilityService() {
         buttonPanel.addView(row2)
 
         controlPanelRoot?.addView(buttonPanel)
-
-        // Кнопка полностью спрятать пульт (в иконку 🕹️)
         controlPanelRoot?.addView(createBtn("❌ Скрыть", Color.argb(255, 150, 50, 50)) { toggleRootVisibility() })
 
         windowManager?.addView(controlPanelRoot, rootParams)
@@ -348,15 +339,25 @@ class MyAccessibilityService : AccessibilityService() {
         r2.addView(createBtn("Вставить", Color.argb(255, 0, 100, 200), fillHeight = false) {
             performEditAction(AccessibilityNodeInfo.ACTION_PASTE, "Вставить")
         })
+        // "Выделить всё" — через системное меню (ACTION_SELECT_ALL не существует в API)
         r2.addView(createBtn("Выделить всё", Color.argb(255, 100, 100, 0), fillHeight = false) {
-            performEditAction(AccessibilityNodeInfo.ACTION_SELECT_ALL, "Выделить всё")
+            performLongPress(cursorX + 40f, cursorY + 40f)
+            hideEditMenu()
+            Toast.makeText(this, "📋 Открыто системное меню — выбери 'Выделить всё'", Toast.LENGTH_LONG).show()
         })
         editMenu?.addView(r2)
 
-        editMenuParams = WindowManager.LayoutParams(
+        val overlayTypeForMenu = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
+        } else {
+            @Suppress("DEPRECATION")
+            WindowManager.LayoutParams.TYPE_PHONE
+        }
+
+        val menuParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
-            overlayType,
+            overlayTypeForMenu,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
@@ -366,7 +367,7 @@ class MyAccessibilityService : AccessibilityService() {
             y = 0
         }
         editMenu?.visibility = View.GONE
-        windowManager?.addView(editMenu, editMenuParams)
+        windowManager?.addView(editMenu, menuParams)
     }
 
     private fun showEditMenu() {
@@ -379,10 +380,15 @@ class MyAccessibilityService : AccessibilityService() {
         if (y + menuH > dm.heightPixels) y = dm.heightPixels - menuH - 10
         if (x < 10) x = 10
         if (y < 10) y = 10
-        editMenuParams.x = x
-        editMenuParams.y = y
+
+        // Обновляем параметры меню через windowManager
+        val newParams = editMenu?.layoutParams as? WindowManager.LayoutParams
+        if (newParams != null) {
+            newParams.x = x
+            newParams.y = y
+            windowManager?.updateViewLayout(editMenu, newParams)
+        }
         editMenu?.visibility = View.VISIBLE
-        windowManager?.updateViewLayout(editMenu, editMenuParams)
     }
 
     private fun hideEditMenu() {
@@ -464,7 +470,7 @@ class MyAccessibilityService : AccessibilityService() {
     private fun performLongPress(x: Float, y: Float) {
         val path = Path().apply { moveTo(x, y) }
         dispatchGesture(GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 1000)).build(), object : GestureResultCallback() {
-            override fun onCompleted(gesture: GestureDescription?) { Toast.makeText(this@MyAccessibilityService, "✅ Системное меню!", Toast.LENGTH_SHORT).show() }
+            override fun onCompleted(gesture: GestureDescription?) { Toast.makeText(this@MyAccessibilityService, "✅ Долгий тап!", Toast.LENGTH_SHORT).show() }
             override fun onCancelled(gesture: GestureDescription?) {}
         }, null)
     }
