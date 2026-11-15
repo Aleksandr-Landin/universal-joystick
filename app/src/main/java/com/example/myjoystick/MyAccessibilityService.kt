@@ -33,11 +33,9 @@ class MyAccessibilityService : AccessibilityService() {
     private var cursorY = 1200f
     private lateinit var cursorParams: WindowManager.LayoutParams
 
-    // Параметры панели выносим в поле, чтобы перестраивать её на лету
     private lateinit var panelParams: WindowManager.LayoutParams
     private var overlayType = 0
 
-    // === ПРИЁМНИК СИГНАЛА ОТ НАСТРОЕК ===
     private val rebuildReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == SettingsManager.ACTION_REBUILD) {
@@ -86,10 +84,11 @@ class MyAccessibilityService : AccessibilityService() {
         }
         windowManager?.addView(cursorView, cursorParams)
 
-        // === ПАРАМЕТРЫ ПАНЕЛИ (создаём один раз, размеры обновляются при перестройке) ===
+        // === ПАРАМЕТРЫ ПАНЕЛИ ===
+        // Ширина — из настроек. Высота — WRAP_CONTENT (подстроится под кнопки и тачпад!)
         panelParams = WindowManager.LayoutParams(
             SettingsManager.getWidthPx(this),
-            SettingsManager.getHeightPx(this),
+            WindowManager.LayoutParams.WRAP_CONTENT, 
             overlayType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
@@ -100,7 +99,6 @@ class MyAccessibilityService : AccessibilityService() {
             y = 200
         }
 
-        // === ПЕРВАЯ СБОРКА ПАНЕЛИ ===
         buildPanel()
 
         // === ТРИГГЕР ===
@@ -126,7 +124,6 @@ class MyAccessibilityService : AccessibilityService() {
         }
         windowManager?.addView(triggerButton, triggerParams)
 
-        // === РЕГИСТРИРУЕМ ПРИЁМНИК СИГНАЛА ===
         val filter = IntentFilter(SettingsManager.ACTION_REBUILD)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(rebuildReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
@@ -134,12 +131,12 @@ class MyAccessibilityService : AccessibilityService() {
             registerReceiver(rebuildReceiver, filter)
         }
 
-        Toast.makeText(this, "✅ Пульт обновлён!", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "✅ Пульт собран без хвостов!", Toast.LENGTH_SHORT).show()
     }
 
-    // === СБОРКА ПАНЕЛИ (вызывается при старте и при перестройке) ===
     private fun buildPanel() {
         val panelAlpha = SettingsManager.getAlpha(this)
+        val trackpadSizePx = SettingsManager.getTrackpadSizePx(this)
 
         controlPanel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -148,12 +145,16 @@ class MyAccessibilityService : AccessibilityService() {
             alpha = panelAlpha
         }
 
-        // --- ТАЧПАД ---
+        // --- ТАЧПАД (ИДЕАЛЬНЫЙ КВАДРАТ) ---
         val trackpad = FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                0, 1f
-            ).apply { bottomMargin = 20 }
+                trackpadSizePx,  // Ширина = стороне квадрата
+                trackpadSizePx   // Высота = стороне квадрата
+            ).apply { 
+                bottomMargin = 10 
+                gravity = Gravity.CENTER_HORIZONTAL // Центрируем квадрат по ширине панели
+            }
+            
             val border = GradientDrawable()
             border.setColor(Color.argb(255, 50, 50, 50))
             border.setStroke(4, Color.argb(255, 100, 100, 100))
@@ -246,26 +247,19 @@ class MyAccessibilityService : AccessibilityService() {
         windowManager?.addView(controlPanel, panelParams)
     }
 
-    // === ПЕРЕСТРОЙКА ПАНЕЛИ ПО НОВЫМ НАСТРОЙКАМ ===
     private fun rebuildPanel() {
-        // 1. Удаляем старую панель
         try {
             controlPanel?.let { windowManager?.removeView(it) }
         } catch (e: Exception) {
             e.printStackTrace()
         }
 
-        // 2. Обновляем размеры в параметрах
         panelParams.width = SettingsManager.getWidthPx(this)
-        panelParams.height = SettingsManager.getHeightPx(this)
+        // Высоту не трогаем, она остается WRAP_CONTENT
 
-        // 3. Собираем панель заново (она сама прочитает прозрачность)
         buildPanel()
-
         Toast.makeText(this, "🔄 Пульт перестроен!", Toast.LENGTH_SHORT).show()
     }
-
-    // === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===
 
     private fun createWeightedParams(): LinearLayout.LayoutParams {
         return LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
