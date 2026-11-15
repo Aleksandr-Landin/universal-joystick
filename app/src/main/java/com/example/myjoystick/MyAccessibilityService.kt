@@ -1,9 +1,9 @@
 package com.example.myjoystick
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityService.GestureResultCallback // <-- ИСПРАВЛЕННЫЙ ИМПОРТ
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.accessibilityservice.GestureDescription
-import android.accessibilityservice.GestureDescription.GestureResultCallback // <-- Добавлен импорт
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -100,7 +100,7 @@ class MyAccessibilityService : AccessibilityService() {
 
         // 3. КНОПКА-ТРИГГЕР
         triggerButton = TextView(this).apply {
-            text = "️"
+            text = "⚙️"
             textSize = 28f
             gravity = Gravity.CENTER
             setBackgroundColor(Color.argb(200, 0, 150, 255))
@@ -174,7 +174,7 @@ class MyAccessibilityService : AccessibilityService() {
             }
             addView(hint)
             val toggleBtn = TextView(this@MyAccessibilityService).apply {
-                text = if (isExpanded) "" else ""
+                text = if (isExpanded) "▼" else "▲"
                 textSize = 20f
                 gravity = Gravity.CENTER
                 setBackgroundColor(Color.argb(180, 100, 100, 100))
@@ -246,8 +246,8 @@ class MyAccessibilityService : AccessibilityService() {
         }
         row2.addView(createBtn("⬆️", Color.argb(255, 60, 60, 60)) { performSwipe(0, 500) })
         row2.addView(createBtn("⬇️", Color.argb(255, 60, 60, 60)) { performSwipe(0, -500) })
-        row2.addView(createBtn("", Color.argb(255, 100, 100, 0)) { teleportCursor(540f, 1200f) })
-        row2.addView(createBtn(" Тап", Color.argb(255, 0, 100, 200)) { performTap(cursorX + 40f, cursorY + 40f) })
+        row2.addView(createBtn("🎯", Color.argb(255, 100, 100, 0)) { teleportCursor(540f, 1200f) })
+        row2.addView(createBtn("👆 Тап", Color.argb(255, 0, 100, 200)) { performTap(cursorX + 40f, cursorY + 40f) })
         buttonPanel.addView(row2)
 
         controlPanelRoot?.addView(buttonPanel)
@@ -259,7 +259,7 @@ class MyAccessibilityService : AccessibilityService() {
             controlPanelRoot?.let { windowManager?.removeView(it) }
         } catch (e: Exception) {}
         buildPanel()
-        Toast.makeText(this, " Пульт перестроен!", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "⚙️ Пульт перестроен!", Toast.LENGTH_SHORT).show()
     }
 
     private fun createBtn(text: String, bgColor: Int, onClick: () -> Unit): TextView {
@@ -334,7 +334,7 @@ class MyAccessibilityService : AccessibilityService() {
             .addStroke(GestureDescription.StrokeDescription(p2, 0, 300)).build(),
             object : GestureResultCallback() {
                 override fun onCompleted(gesture: GestureDescription?) {
-                    Toast.makeText(this@MyAccessibilityService, if (zoomIn) " Увеличено!" else " Уменьшено!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MyAccessibilityService, if (zoomIn) "🔍 Увеличено!" else "🔍 Уменьшено!", Toast.LENGTH_SHORT).show()
                 }
                 override fun onCancelled(gesture: GestureDescription?) {}
             }, null)
