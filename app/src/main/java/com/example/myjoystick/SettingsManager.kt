@@ -4,27 +4,28 @@ import android.content.Context
 
 object SettingsManager {
     private const val PREFS_NAME = "joystick_prefs"
-    private const val KEY_WIDTH = "panel_width"
+    
+    private const val KEY_TRACKPAD_WIDTH = "trackpad_width"
     private const val KEY_TRACKPAD_HEIGHT = "trackpad_height"
-    private const val KEY_BUTTON_HEIGHT = "button_height"
-    private const val KEY_ALPHA = "panel_alpha"
+    private const val KEY_BUTTON_PANEL_WIDTH = "button_panel_width"
+    private const val KEY_BUTTON_PANEL_HEIGHT = "button_panel_height"
     private const val KEY_IS_EXPANDED = "is_panel_expanded"
 
-    private const val DEFAULT_WIDTH_DP = 250
+    private const val DEFAULT_TRACKPAD_WIDTH_DP = 250
     private const val DEFAULT_TRACKPAD_HEIGHT_DP = 150
-    private const val DEFAULT_BUTTON_HEIGHT_DP = 50
-    private const val DEFAULT_ALPHA = 80
+    private const val DEFAULT_BUTTON_PANEL_WIDTH_DP = 250
+    private const val DEFAULT_BUTTON_PANEL_HEIGHT_DP = 200
     private const val DEFAULT_IS_EXPANDED = false
 
     const val ACTION_REBUILD = "com.example.myjoystick.REBUILD_PANEL"
 
-    fun saveSettings(context: Context, widthDp: Int, trackpadHeightDp: Int, buttonHeightDp: Int, alphaPercent: Int) {
+    fun saveSettings(context: Context, trackpadWidthDp: Int, trackpadHeightDp: Int, buttonPanelWidthDp: Int, buttonPanelHeightDp: Int) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit()
-            .putInt(KEY_WIDTH, widthDp)
+            .putInt(KEY_TRACKPAD_WIDTH, trackpadWidthDp)
             .putInt(KEY_TRACKPAD_HEIGHT, trackpadHeightDp)
-            .putInt(KEY_BUTTON_HEIGHT, buttonHeightDp)
-            .putInt(KEY_ALPHA, alphaPercent)
+            .putInt(KEY_BUTTON_PANEL_WIDTH, buttonPanelWidthDp)
+            .putInt(KEY_BUTTON_PANEL_HEIGHT, buttonPanelHeightDp)
             .apply()
     }
 
@@ -38,8 +39,8 @@ object SettingsManager {
         return prefs.getBoolean(KEY_IS_EXPANDED, DEFAULT_IS_EXPANDED)
     }
 
-    fun getWidthPx(context: Context): Int {
-        val dp = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getInt(KEY_WIDTH, DEFAULT_WIDTH_DP)
+    fun getTrackpadWidthPx(context: Context): Int {
+        val dp = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getInt(KEY_TRACKPAD_WIDTH, DEFAULT_TRACKPAD_WIDTH_DP)
         return dpToPx(context, dp)
     }
 
@@ -48,15 +49,14 @@ object SettingsManager {
         return dpToPx(context, dp)
     }
 
-    fun getButtonHeightPx(context: Context): Int {
-        val dp = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getInt(KEY_BUTTON_HEIGHT, DEFAULT_BUTTON_HEIGHT_DP)
+    fun getButtonPanelWidthPx(context: Context): Int {
+        val dp = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getInt(KEY_BUTTON_PANEL_WIDTH, DEFAULT_BUTTON_PANEL_WIDTH_DP)
         return dpToPx(context, dp)
     }
 
-    fun getAlpha(context: Context): Float {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val percent = prefs.getInt(KEY_ALPHA, DEFAULT_ALPHA)
-        return percent / 100f
+    fun getButtonPanelHeightPx(context: Context): Int {
+        val dp = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getInt(KEY_BUTTON_PANEL_HEIGHT, DEFAULT_BUTTON_PANEL_HEIGHT_DP)
+        return dpToPx(context, dp)
     }
 
     private fun dpToPx(context: Context, dp: Int): Int {
