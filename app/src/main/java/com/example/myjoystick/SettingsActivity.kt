@@ -1,74 +1,32 @@
 package com.example.myjoystick
 
-import android.content.Intent
-import android.os.Bundle
-import android.widget.*
-import androidx.appcompat.app.AppCompatActivity
+import android.content.Context
 
-class SettingsActivity : AppCompatActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        
-        val scrollView = ScrollView(this)
-        val layout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(40, 60, 40, 40)
-        }
-        val prefs = getSharedPreferences("joystick_prefs", MODE_PRIVATE)
+object SettingsManager {
+    private const val PREFS_NAME = "joystick_prefs"
+    private const val KEY_WIDTH = "panel_width"
+    private const val KEY_HEIGHT = "panel_height"
+    private const val KEY_ALPHA = "panel_alpha"
 
-        // Вспомогательная функция для создания полей
-        fun addField(label: String, key: String, defaultVal: Int): EditText {
-            val tv = TextView(this).apply { text = label; textSize = 18f; setPadding(0, 20, 0, 0) }
-            val et = EditText(this).apply {
-                hint = "Например, $defaultVal"
-                inputType = android.text.InputType.TYPE_CLASS_NUMBER
-                setText(prefs.getInt(key, defaultVal).toString())
-            }
-            layout.addView(tv)
-            layout.addView(et)
-            return et
-        }
+    private const val DEF_WIDTH = 280
+    private const val DEF_HEIGHT = 400
+    private const val DEF_ALPHA = 80
 
-        val etTW = addField("Ширина тачпада (dp):", "trackpad_w", 250)
-        val etTH = addField("Высота тачпада (dp):", "trackpad_h", 150)
-        val etBW = addField("Ширина панели кнопок (dp):", "buttons_w", 250)
-        val etBH = addField("Высота панели кнопок (dp):", "buttons_h", 150)
+    const val ACTION_REBUILD = "com.example.myjoystick.REBUILD_PANEL"
 
-        val currentAlpha = (SettingsManager.getAlpha(this) * 100).toInt()
-        val tvAlpha = TextView(this).apply { text = "Прозрачность: $currentAlpha%"; textSize = 18f; setPadding(0, 30, 0, 0) }
-        val seekBar = SeekBar(this).apply { max = 100; progress = currentAlpha }
-        
-        seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                tvAlpha.text = "Прозрачность: $progress%"
-            }
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
-        })
-
-        layout.addView(tvAlpha)
-        layout.addView(seekBar)
-
-        val btnSave = Button(this).apply {
-            text = "Сохранить и применить"
-            setPadding(0, 40, 0, 0)
-        }
-        layout.addView(btnSave)
-        scrollView.addView(layout)
-        setContentView(scrollView)
-
-        btnSave.setOnClickListener {
-            val tw = etTW.text.toString().toIntOrNull() ?: 250
-            val th = etTH.text.toString().toIntOrNull() ?: 150
-            val bw = etBW.text.toString().toIntOrNull() ?: 250
-            val bh = etBH.text.toString().toIntOrNull() ?: 150
-            val alpha = seekBar.progress
-
-            SettingsManager.saveSettings(this, tw, th, bw, bh, alpha)
-            sendBroadcast(Intent(SettingsManager.ACTION_REBUILD))
-            
-            Toast.makeText(this, "Настройки применены! 🚀", Toast.LENGTH_SHORT).show()
-            finish()
+    fun saveSettings(context: Context, widthDp: Int, heightDp: Int, alphaPercent: Int) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().apply {
+            putInt(KEY_WIDTH, widthDp)
+            putInt(KEY_HEIGHT, heightDp)
+            putInt(KEY_ALPHA, alphaPercent)
+            apply()
         }
     }
+
+    fun getWidthPx(context: Context): Int = dpToPx(context, getPrefs(context).getInt(KEY_WIDTH, DEF_WIDTH))
+    fun getHeightPx(context: Context): Int = dpToPx(context, getPrefs(context).getInt(KEY_HEIGHT, DEF_HEIGHT))
+    fun getAlpha(context: Context): Float = getPrefs(context).getInt(KEY_ALPHA, DEF_ALPHA) / 100f
+
+    private fun getPrefs(context: Context) = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private fun dpToPx(context: Context, dp: Int): Int = (dp * context.resources.displayMetrics.density).toInt()
 }
