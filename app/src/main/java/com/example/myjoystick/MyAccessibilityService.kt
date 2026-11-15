@@ -77,7 +77,18 @@ class MyAccessibilityService : AccessibilityService() {
         }
         windowManager?.addView(cursorView, cursorParams)
 
-        // 2. ПАРАМЕТРЫ КОРНЕВОЙ ПАНЕЛИ (WRAP_CONTENT УБИРАЕТ ПУСТОТУ!)
+        // 2. РАСЧЁТ ФИКСИРОВАННОЙ ПОЗИЦИИ ДЛЯ ТАЧПАДА
+        val displayMetrics = resources.displayMetrics
+        val screenHeight = displayMetrics.heightPixels
+        
+        val tH = SettingsManager.getTrackpadH(this)
+        val bH = SettingsManager.getButtonsH(this)
+        val bottomMarginPx = 40 // Отступ от самого низа экрана
+
+        // Вычисляем Y так, чтобы даже в развёрнутом виде панель была у нижнего края.
+        // При сворачивании этот Y не изменится, поэтому тачпад останется на месте!
+        val fixedTopY = screenHeight - tH - bH - bottomMarginPx
+
         rootParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -86,9 +97,9 @@ class MyAccessibilityService : AccessibilityService() {
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.BOTTOM or Gravity.END
+            gravity = Gravity.TOP or Gravity.END // <-- ПРИВЯЗКА К ВЕРХНЕМУ КРАЮ
             x = 20
-            y = 20
+            y = fixedTopY // <-- ФИКСИРОВАННАЯ КООРДИНАТА
         }
 
         buildPanel()
